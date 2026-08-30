@@ -1,15 +1,17 @@
 #include <switch.h>
 #include <string.h>
-#include <cstdio>
 #include "errors.h"
+#include <stdio.h>
 #include "gecko.h"
+#include "dmntcht.h"
 
 extern "C" {
 	extern u32 __start__;
 
 	u32 __nx_applet_type = AppletType_None;
 
-	#define INNER_HEAP_SIZE 0x834000 // Arbitrary heap size. 
+	//#define INNER_HEAP_SIZE 0x834000 // Arbitrary heap size. 
+	#define INNER_HEAP_SIZE 0x41A000 // Reduced heap size. 
 	size_t nx_inner_heap_size = INNER_HEAP_SIZE;
 	char   nx_inner_heap[INNER_HEAP_SIZE];
 
@@ -35,15 +37,27 @@ void __libnx_initheap(void) {
 
 void __appInit(void) {
 	Result rc;
+
+    
+        rc = setsysInitialize();
+        if (R_SUCCEEDED(rc)) {
+            SetSysFirmwareVersion fw;
+            rc = setsysGetFirmwareVersion(&fw);
+            if (R_SUCCEEDED(rc))
+                hosversionSet((BIT(31)) | (MAKEHOSVERSION(fw.major, fw.minor, fw.micro)));
+            setsysExit();
+        }
+        if (rc!=0) {
+            printf("version set failed rc=%d",rc);
+            hosversionSet(6);
+        };
+    // SetSysFirmwareVersion hosversion;
+    // rc = setsysGetFirmwareVersion(&hosversion);
+    // hosversionSet(hosversion.major);
 	/* Initialize services */
 	rc = smInitialize();
 	if (R_FAILED(rc)) {
 		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_InitFail_SM));
-	}
-
-	rc = ldrDmntInitialize();
-	if (R_FAILED(rc)) {
-		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized));
 	}
 
 	rc = pmdmntInitialize();
@@ -51,16 +65,24 @@ void __appInit(void) {
 		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_NotInitialized));
 	}
 
-	rc = socketInitialize(socketGetDefaultInitConfig());
-	if (R_FAILED(rc)) {
-		fatalThrow(MAKERESULT(Module_TCPGecko, TCPGeckoError_initfail));
-	}
-	
 	rc= pminfoInitialize();
 	if (R_FAILED(rc)) {
 		fatalThrow(rc);
 	}
     
+	rc = ldrDmntInitialize();
+	if (R_FAILED(rc)) {
+		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized));
+	}
+	// rc = nsdevInitialize();
+	// if (R_FAILED(rc)) {
+	// 	// fatalThrow(MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized));
+	// }
+	rc = socketInitialize(socketGetDefaultInitConfig());
+	if (R_FAILED(rc)) {
+		fatalThrow(MAKERESULT(Module_TCPGecko, TCPGeckoError_initfail));
+	}
+	
     rc = fsInitialize();
     if (R_FAILED(rc)) {
         fatalThrow(MAKERESULT(Module_Libnx, LibnxError_InitFail_FS));
@@ -70,6 +92,11 @@ void __appInit(void) {
     if (R_FAILED(rc)) {
         fatalThrow(rc); // maybe set a variable like noSd or something? It doesn't HAVE to log.
     }
+
+    // rc = dmntchtInitialize();
+    // if (R_FAILED(rc)) {
+    //     fatalThrow(rc); // maybe set a variable like noSd or something? It doesn't HAVE to log.
+    // }
 }
 
 void __appExit(void) {
@@ -80,6 +107,8 @@ void __appExit(void) {
     socketExit();
     pmdmntExit();
     ldrDmntExit();
+    // nsdevExit();
+    dmntchtExit();
 	smExit();
 }
 
@@ -117,6 +146,11 @@ static Result _eventCallback(Gecko::DebugEvent event){
             printf("ThreadAttachEvent(thread_id:%08lx, tls_pointer:%08lx, entry_point:%08lx)\r\n", tad.thread_id, tad.tls_pointer, tad.entry_point);
         }
         break;
+        case 4: 
+        {
+            Gecko::ExceptionData texcept = event.data.exception;
+            printf("ExceptionEvent(fault_reg:%16lx, type:%16lx, per_exception:%16lx)\r\n",texcept.fault_reg, texcept.type, texcept.per_exception);
+        } break;
         default:
         printf("UnknownEvent(type:%d Data:", event.event_type);
         for(u32 i = 0; i < DEBUG_DATA_SIZE; i++){
@@ -131,9 +165,9 @@ static Result _eventCallback(Gecko::DebugEvent event){
 
 int main(int argc, char **argv)
 {
-    //g_debugFile = fopen("Log.txt", "w");
+    g_debugFile = fopen("/atmosphere/contents/054e4f4558454000/Log.txt", "w");//w or a
     g_Context.dbg.addEventCallback(_eventCallback);
-    
+
     while(appletMainLoop() && !g_Context.exit){
         g_Context.reset();
         if(g_Context.conn.connect()){

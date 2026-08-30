@@ -47,7 +47,15 @@ Result Gecko::Debugger::attach(u64 pid){
     rc = svcDebugActiveProcess(&handle, pid);
     if(R_SUCCEEDED(rc)){
         this->pid = pid;
-    }
+    } else 
+    {handle = 0; pid =0;}
+    return rc;
+}
+//fake attached and detatch 
+Result Gecko::Debugger::assign(u64 pid){ 
+    Result rc = 0;
+    handle = pid;
+    this->pid = pid;
     return rc;
 }
 
@@ -71,7 +79,7 @@ Result Gecko::Debugger::detatch(){
 Result Gecko::Debugger::resume(){
     RETURN_NOT_ATTACHED();
     flushEvents();
-    return svcContinueDebugEvent(handle, 4 | 2 | 1, 0, 0); //TODO: TID
+    return svcContinueDebugEvent(handle, 4 | 2 | 1, 0, 0);
 }
 
 Result Gecko::Debugger::pause(){

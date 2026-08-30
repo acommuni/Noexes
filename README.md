@@ -13,21 +13,10 @@ A multi-platform graphical remote debugger for the Nintendo Switch.
 
 Visit out [releases](/releases) page, and download the [latest](/releases/latest) version, and extract the whole zip file to a directory on your machine.
 
-### Copying Files
 
-Copy ```noexs.kip1``` to the root of your switch sd card.
+### Server from Tomvita fork : https://github.com/tomvita/Noexes
 
-### Editing ```hekate_ipl.ini```
-
-Using a text editor open ```hekate_ipl.ini``` (located within the bootloader directory on your switch's sd card) and add the following:
-
-```
-[Noexes]
-debugmode=1
-kip1=noexs.kip1
-```
-
-And that's it switch sided! Now just select "Noexes" when booting using hekate to launch HOS with noexes running.
+To install the sysmodule copy the content of bin\054e4f4558454000_18.zip to contents directory of atmosphere. (From : https://github.com/tomvita/Noexes/releases/tag/1.4.157)          
 
 ### Running the Client
 

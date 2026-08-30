@@ -20,5 +20,7 @@ enum {
     TCPGeckoError_invalid_watchpoint,
     TCPGeckoError_watchpoint_not_set,
     TCPGeckoError_no_free_watchpoints,
-    TCPGeckoError_incorrect_debugger
+    TCPGeckoError_incorrect_debugger,
+    TCPGeckoError_user_abort,
+    TCPGeckoError_file_access_error
 };
