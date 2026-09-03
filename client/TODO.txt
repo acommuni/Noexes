@@ -23,9 +23,48 @@
 -> Nouvelles recherche sur un dump existant 
 -> Dump relative sans le suffix a corriger
 
-https://www.cheatslips.com/wiki/home/code_types
+https://www.cheatslips.com/wiki/code_types
 https://github.com/Atmosphere-NX/Atmosphere/blob/master/docs/features/cheats.md
 https://raw.githubusercontent.com/Atmosphere-NX/Atmosphere/master/docs/features/cheats.md
 
 Enlever to les printstack, gérer les erreurs et les logs
 Gerer boutton multiple dans la grammaire
+
+https://github.com/tomvita/PointerSearcher-SE
+
+Commande Noexs : https://github.com/tomvita/PointerSearcher-SE/blob/master/PointerSearcher/NoexsCommands.cs
+
+
+        Abort = 0x00,
+        Status = 0x01,
+        Poke8 = 0x02,
+        Poke16 = 0x03,
+        Poke32 = 0x04,
+        Poke64 = 0x05,
+        ReadMem = 0x06,
+        WriteMem = 0x07,
+        Resume = 0x08,
+        Pause = 0x09,
+        Attach = 0x0A,
+        detach = 0x0B,
+        QueryMemSingle = 0x0C,
+        QueryMemMulti = 0x0D,
+        CurrentPid = 0x0E,
+        AttachedPid = 0x0F,
+        ListPids = 0x10,
+        GetTitleId = 0x11,
+        Disconnect = 0x12,
+        ReadMemMulti = 0x13,
+        SetBreakpoint = 0x14,
+        FreezeAddress = 0x15,
+        SearchLocal = 0x16,
+        FetchResult = 0x17,
+        DetachDmnt = 0x18,
+        DumpPtr = 0x19,
+        AttachDmnt = 0x1A,
+        GetBookmark = 0x1B,
+        PutBookmark = 0x1C,
+        DmntResume = 0x1D,
+        ResolvePointers = 0x1E
+
+

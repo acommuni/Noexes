@@ -22,6 +22,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.AnchorPane;
 import me.mdbell.javafx.control.FormattedTableCell;
 import me.mdbell.noexs.core.Debugger;
+import me.mdbell.noexs.core.DebuggerStatus;
 import me.mdbell.noexs.core.EMemoryRegion;
 import me.mdbell.noexs.core.MemoryInfo;
 import me.mdbell.noexs.core.MemoryType;
@@ -205,7 +206,9 @@ public class ToolsController implements IController {
 
                 if (attachOk) {
 
-                    String status = "Attached to process pid : " + selectedPid;
+                    DebuggerStatus dbgSt = conn.getStatus();
+
+                    String status = "Attached to process pid : " + selectedPid + " [" + dbgSt + "]";
                     if (attachAlreadyDone) {
                         status += " (Already attached)";
                     }

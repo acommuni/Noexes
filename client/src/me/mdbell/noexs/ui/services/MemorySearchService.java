@@ -405,7 +405,7 @@ public class MemorySearchService extends Service<SearchResult> {
                 e.printStackTrace();
                 return null;
             }
-            try (BufferedOutputStream dout = new BufferedOutputStream(doutRaw, 1024*1024)) {
+            try (BufferedOutputStream dout = new BufferedOutputStream(doutRaw, 1024 * 1024)) {
                 while (!isCancelled()) {
                     DumpRegion r = supplier.get();
                     logger.debug("Dumping region : {}", r);
@@ -438,9 +438,7 @@ public class MemorySearchService extends Service<SearchResult> {
                     }
                 }
             }
-            if (doutRaw != null) {
-                doutRaw.close();
-            }
+
             logger.debug("Dump finished");
             if (resume) {
                 conn.resume();

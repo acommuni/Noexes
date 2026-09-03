@@ -1,6 +1,5 @@
 package me.mdbell.noexs.core;
 
-import java.io.BufferedOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -25,6 +24,7 @@ import me.mdbell.noexs.core.debugger.RDebPoke64Input;
 import me.mdbell.noexs.core.debugger.RDebPoke8Input;
 import me.mdbell.noexs.core.debugger.RDebSetBreakpointInput;
 import me.mdbell.noexs.core.debugger.RDebStatusOutput;
+import me.mdbell.noexs.core.utils.AutoReleaseSemaphore;
 import me.mdbell.noexs.misc.BreakpointFlagBuilder;
 import me.mdbell.noexs.misc.BreakpointType;
 import me.mdbell.noexs.misc.WatchpointFlagBuilder;
@@ -38,6 +38,8 @@ public class Debugger implements Commands, Closeable {
     private IConnection conn;
     private MemoryInfo prev;
     private Semaphore semaphore = new Semaphore(1);
+    private AutoReleaseSemaphore<ConnectionException> autoReleaseSemaphore = new AutoReleaseSemaphore(semaphore,
+            ConnectionException.class);
     private int protocolVersion;
 
     public static final int CURRENT_PROTOCOL_VERSION = (NoexsApplication.VERSION_MAJOR << 16)
@@ -51,22 +53,8 @@ public class Debugger implements Commands, Closeable {
         return conn;
     }
 
-    private void acquire() {
-        try {
-            semaphore.acquire();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-            throw new ConnectionException(e);
-        }
-    }
-
-    private void release() {
-        semaphore.release();
-    }
-
     public DebuggerStatus getStatus() {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             RDebStatusOutput statusOutput = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_STATUS);
 
             int status = statusOutput.status();
@@ -85,8 +73,6 @@ public class Debugger implements Commands, Closeable {
             protocolVersion |= patch; // we don't need to check the patch value, as it should always be backwards
                                       // compatible.
             return DebuggerStatus.forId(status);
-        } finally {
-            release();
         }
     }
 
@@ -108,16 +94,13 @@ public class Debugger implements Commands, Closeable {
     }
 
     public void poke8(long addr, int value) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
 
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE8, new RDebPoke8Input(addr, (byte) value));
             Result rc = conn.readResult();
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
-        } finally {
-            release();
         }
     }
 
@@ -129,15 +112,12 @@ public class Debugger implements Commands, Closeable {
     }
 
     public void poke16(long addr, int value) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE16, new RDebPoke16Input(addr, (short) value));
             Result rc = conn.readResult();
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
-        } finally {
-            release();
         }
     }
 
@@ -148,15 +128,12 @@ public class Debugger implements Commands, Closeable {
     }
 
     public void poke32(long addr, int value) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE32, new RDebPoke32Input(addr, (int) value));
             Result rc = conn.readResult();
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
-        } finally {
-            release();
         }
     }
 
@@ -166,15 +143,12 @@ public class Debugger implements Commands, Closeable {
     }
 
     public void poke64(long addr, long value) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE64, new RDebPoke64Input(addr, (long) value));
             Result rc = conn.readResult();
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
-        } finally {
-            release();
         }
     }
 
@@ -184,8 +158,7 @@ public class Debugger implements Commands, Closeable {
     }
 
     public Result setWatchpoint(boolean read, boolean write, long addr) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             Result rc;
 
             WatchpointFlagBuilder.MatchType t;
@@ -216,19 +189,14 @@ public class Debugger implements Commands, Closeable {
                 System.out.println("wp:" + rc);
             }
             return rc;
-        } finally {
-            release();
         }
     }
 
     public Result setBreakpoint(int id, long flags, long addr) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_SET_BREAKPOINT,
                     new RDebSetBreakpointInput(id, addr, flags));
             return conn.readResult();
-        } finally {
-            release();
         }
     }
 
@@ -237,8 +205,7 @@ public class Debugger implements Commands, Closeable {
     }
 
     public Result writemem(byte[] data, int off, int len, long addr) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             conn.writeCommand(COMMAND_WRITE);
             conn.writeLong(addr);
             conn.writeInt(len);
@@ -252,8 +219,6 @@ public class Debugger implements Commands, Closeable {
                 return r;
             }
             return conn.readResult();
-        } finally {
-            release();
         }
     }
 
@@ -265,8 +230,7 @@ public class Debugger implements Commands, Closeable {
     }
 
     public void readmem(long start, int size, OutputStream to) throws IOException {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             conn.writeCommand(COMMAND_READ);
             conn.writeLong(start);
             conn.writeInt(size);
@@ -274,30 +238,27 @@ public class Debugger implements Commands, Closeable {
 
             Result rc = conn.readResult();
             if (rc.succeeded()) {
-                //try (BufferedOutputStream bufferedWriter = new BufferedOutputStream(to)) {
-                    byte[] buffer = new byte[2048 * 4];
-                    while (size > 0) {
-                        rc = conn.readResult();
-                        if (rc.failed()) {
-                            conn.readResult();
-                            throw new ConnectionException(rc);
-                        }
-                        int len = readCompressed(buffer);
-                        // to.write(buffer, 0, len);
-                        to.write(buffer, 0, len);
-                        size -= len;
+                // try (BufferedOutputStream bufferedWriter = new BufferedOutputStream(to)) {
+                byte[] buffer = new byte[2048 * 4];
+                while (size > 0) {
+                    rc = conn.readResult();
+                    if (rc.failed()) {
+                        conn.readResult();
+                        throw new ConnectionException(rc);
                     }
-                //}
+                    int len = readCompressed(buffer);
+                    // to.write(buffer, 0, len);
+                    to.write(buffer, 0, len);
+                    size -= len;
+                }
+                // }
             }
             conn.readResult();
-        } finally {
-            release();
         }
     }
 
     public ByteBuffer readmem(long addr, int size, byte[] bytes) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             conn.writeCommand(COMMAND_READ);
             conn.writeLong(addr);
             conn.writeInt(size);
@@ -327,8 +288,6 @@ public class Debugger implements Commands, Closeable {
             }
             conn.readResult(); // ignored
             return ByteBuffer.wrap(bytes);
-        } finally {
-            release();
         }
     }
 
@@ -342,12 +301,9 @@ public class Debugger implements Commands, Closeable {
 
     public Result attach(long pid) {
         logger.debug("COMMAND : Attach to pid :{}", pid);
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_ATTACH, new RDebAttachInput(pid));
             return conn.readResult();
-        } finally {
-            release();
         }
     }
 
@@ -357,8 +313,7 @@ public class Debugger implements Commands, Closeable {
 
     public MemoryInfo query(long address) {
         logger.debug("COMMAND : Query Memory  address:{}", HexUtils.formatAddress(address));
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             if (prev != null && prev.getAddress() != 0 && address >= prev.getAddress()
                     && address < prev.getNextAddress()) {
                 return prev;
@@ -370,15 +325,12 @@ public class Debugger implements Commands, Closeable {
             prev = readInfo();
             logger.debug("COMMAND Result :{} ", prev);
             return prev;
-        } finally {
-            release();
         }
     }
 
     public MemoryInfo[] query(long start, int max) {
         logger.debug("COMMAND : Query Memory Multi start:{}, max:{}", start, max);
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             conn.writeCommand(COMMAND_QUERY_MEMORY_MULTI);
             conn.writeLong(start);
             conn.writeInt(max);
@@ -396,14 +348,11 @@ public class Debugger implements Commands, Closeable {
             conn.readResult(); // ignored here, it gets checked in readInfo()
             logger.debug("COMMAND Result :{} memory info", count);
             return Arrays.copyOf(res, count);
-        } finally {
-            release();
         }
     }
 
     public long getCurrentPid() {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             RDebCurrentPidOutput currentPid = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_CURRENT_PID);
             long pid = currentPid.pid();
             Result rc = conn.readResult();
@@ -412,14 +361,11 @@ public class Debugger implements Commands, Closeable {
             }
             logger.debug("COMMAND Result : pid={}", pid);
             return pid;
-        } finally {
-            release();
         }
     }
 
     public long getAttachedPid() {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             RDebGetAttachedPidOutput attachedPid = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_GET_ATTACHED_PID);
             long pid = attachedPid.pid();
             Result rc = conn.readResult();
@@ -427,14 +373,11 @@ public class Debugger implements Commands, Closeable {
                 throw new ConnectionException("This is impossible, so you've done something terribly wrong", rc);
             }
             return pid;
-        } finally {
-            release();
         }
     }
 
     public long[] getPids() {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
 
             RDebGetPidsOutput getPids = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_GET_PIDS);
             long[] pids = getPids.pids();
@@ -443,14 +386,11 @@ public class Debugger implements Commands, Closeable {
                 throw new ConnectionException(rc);
             }
             return pids;
-        } finally {
-            release();
         }
     }
 
     public long getTitleId(long pid) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             RDebGetTitleIdOutput res = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_GET_TITLEID,
                     new RDebGetTitleIdInput(pid));
             long tid = res.tid();
@@ -459,21 +399,15 @@ public class Debugger implements Commands, Closeable {
                 // TODO throw? idk
             }
             return tid;
-        } finally {
-            release();
         }
     }
 
     private void disconnect() {
-        Result rc = getResult(EDebCommand.COMMAND_DISCONNECT);
-        if (rc.failed()) {
-            throw new ConnectionException("This is impossible, so you've done something terribly wrong", rc);
-        }
+        getResult(EDebCommand.COMMAND_DISCONNECT, "This is impossible, so you've done something terribly wrong");
     }
 
     public void getBookmark() {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             conn.writeCommand(COMMAND_GET_BOOKMARK);
             conn.flush();
             int count = conn.readInt();
@@ -490,8 +424,6 @@ public class Debugger implements Commands, Closeable {
                 throw new ConnectionException(rc);
             }
 
-        } finally {
-            release();
         }
     }
 
@@ -566,13 +498,23 @@ public class Debugger implements Commands, Closeable {
     }
 
     private Result getResult(EDebCommand cmd) {
-        acquire();
-        try {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, cmd);
             return conn.readResult();
-        } finally {
-            release();
         }
+    }
+
+    private Result getResult(EDebCommand cmd, String failureReason) {
+        Result res = null;
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+            DebuggerUtils.runCommand(conn, cmd);
+            res = conn.readResult();
+        }
+        if (res.failed()) {
+            throw new ConnectionException(failureReason, res);
+        }
+
+        return res;
     }
 
     public long peek(DataType type, long addr) {
