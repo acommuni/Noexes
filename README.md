@@ -28,6 +28,16 @@ java -jar JNoexsClient.jar
 
 If you still have problems please double check that you're running at least Java 10 (you can verify this by using the command ``java -version``). If you are feel free to open an issue and I'll try to get back to you ASAP!
 
+### USB ###
+
+atmosphere\config\system_settings.ini
+
+=> Set USB 3.0 
+
+[usb]
+usb30_force_enabled = u8!0x1
+
+
 ### Using the Client
 
 **TODO**

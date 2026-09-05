@@ -1,15 +1,26 @@
 package me.mdbell.noexs.ui.services;
 
+import java.net.InetSocketAddress;
+import java.net.Socket;
+
+import javax.usb.UsbDevice;
+import javax.usb.UsbException;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import javafx.concurrent.ScheduledService;
 import javafx.concurrent.Task;
 import me.mdbell.noexs.core.IConnection;
 import me.mdbell.noexs.io.net.SocketConnection;
+import me.mdbell.noexs.io.usb.UsbConnection;
+import me.mdbell.noexs.io.usb.UsbUtils;
 import me.mdbell.noexs.ui.models.ConnectionType;
 
-import java.net.InetSocketAddress;
-import java.net.Socket;
-
 public class DebuggerConnectionService extends ScheduledService<IConnection> {
+
+    private static final Logger logger = LogManager.getLogger(DebuggerConnectionService.class);
+
     private String host;
     private int port;
     private int timeout = 1000;
@@ -40,6 +51,26 @@ public class DebuggerConnectionService extends ScheduledService<IConnection> {
                         return new SocketConnection(s);
                     }
                 };
+            case USB:
+                return new Task<>() {
+                    @Override
+                    protected IConnection call() {
+                        UsbDevice switchDevice = null;
+
+                        try {
+                            switchDevice = UsbUtils.findSwitch();
+                            if (switchDevice != null) {
+                                logger.debug("Switch connected to USB found : {}", switchDevice);
+                                updateMessage("Connecting to USB :" + switchDevice);
+                                return new UsbConnection(switchDevice);
+                            }
+                        } catch (UsbException e) {
+                            e.printStackTrace();
+                        }
+
+                        throw new UnsupportedOperationException("Unable to find switch on USB");
+                    }
+                };
             default:
                 return new Task<>() {
                     @Override
@@ -60,5 +91,8 @@ public class DebuggerConnectionService extends ScheduledService<IConnection> {
 
     public void setType(ConnectionType type) {
         this.type = type;
+        if (this.type != null) {
+            setMaximumFailureCount(this.type.getMaxConnectionFailureCountt());
+        }
     }
 }

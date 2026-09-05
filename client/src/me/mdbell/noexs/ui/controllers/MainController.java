@@ -11,6 +11,8 @@ import java.util.TimerTask;
 import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
+import javax.usb.UsbException;
+
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -37,6 +39,7 @@ import me.mdbell.noexs.core.DebuggerStatus;
 import me.mdbell.noexs.core.IConnection;
 import me.mdbell.noexs.core.Result;
 import me.mdbell.noexs.io.net.NetworkConstants;
+import me.mdbell.noexs.io.usb.UsbUtils;
 import me.mdbell.noexs.misc.NopConnection;
 import me.mdbell.noexs.misc.ResultDecoder;
 import me.mdbell.noexs.ui.NoexsApplication;
@@ -143,7 +146,19 @@ public class MainController implements NetworkConstants, IController {
         ipAddr.setText(Settings.getConnectionHost());
 
         connectionType.getItems().addAll(ConnectionType.values());
-        connectionType.getSelectionModel().select(ConnectionType.NETWORK); // TODO save/store this
+
+        ConnectionType cnxType = ConnectionType.NETWORK;
+        try {
+            logger.debug("Try to find switch on USB");
+            if (UsbUtils.findSwitch() != null) {
+                logger.debug("Found switch on USB, connexionType set to USB");
+                cnxType = ConnectionType.USB;
+            }
+        } catch (UsbException e) {
+            e.printStackTrace();
+        }
+
+        connectionType.getSelectionModel().select(cnxType); // TODO save/store this
         connectionType.getSelectionModel().selectedItemProperty()
                 .addListener((observable, oldValue, newValue) -> ipAddr.setDisable(newValue != ConnectionType.NETWORK));
 

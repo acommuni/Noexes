@@ -68,3 +68,6 @@ Commande Noexs : https://github.com/tomvita/PointerSearcher-SE/blob/master/Point
         ResolvePointers = 0x1E
 
 
+
+https://deepwiki.com/Atmosphere-NX/Atmosphere/5.4-debug-monitor-and-cheat-engine
+

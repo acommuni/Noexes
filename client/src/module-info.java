@@ -30,5 +30,5 @@ module JNoexes {
     opens me.mdbell.noexs.code.opcode.manager to org.reflections, org.apache.commons.lang3;
     opens me.mdbell.noexs.code.opcode to org.reflections, org.apache.commons.lang3;
     opens me.mdbell.noexs.code.opcode.annotation to org.reflections, org.apache.commons.lang3;
-
+    opens me.mdbell.noexs.io.usb to org.usb4java.javax;
 }
