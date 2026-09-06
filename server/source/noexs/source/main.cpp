@@ -165,8 +165,10 @@ static Result _eventCallback(Gecko::DebugEvent event){
 
 int main(int argc, char **argv)
 {
-    g_debugFile = fopen("/atmosphere/contents/054e4f4558454000/Log.txt", "w");//w or a
+    g_debugFile = fopen("/atmosphere/logs/GeckoLog.txt", "a");//w or a
     g_Context.dbg.addEventCallback(_eventCallback);
+
+    printf("Starting Gecko gateway\n");
 
     while(appletMainLoop() && !g_Context.exit){
         g_Context.reset();
@@ -178,6 +180,9 @@ int main(int argc, char **argv)
             }
         }
     }
+
+    printf("Stoping Gecko gateway\n");
+
     if(g_debugFile){
         fclose(g_debugFile);
         g_debugFile = NULL;

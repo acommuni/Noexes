@@ -1,0 +1,72 @@
+17:56:52.176 [JavaFX Application Thread] DEBUG me.mdbell.noexs.ui.controllers.MainController|initialize      - Try to find switch on USB
+17:56:52.369 [JavaFX Application Thread] DEBUG me.mdbell.noexs.ui.controllers.MainController|initialize      - Found switch on USB, connexionType set to USB
+17:57:12.038 [JavaFX Application Thread] ERROR me.mdbell.noexs.ui.controllers.MainController|newDisconnect   - Invalid state, cannot disconnect!
+18:08:59.138 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_CURRENT_PID [0xE]
+18:08:59.145 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pid->long:LONG=137
+18:08:59.196 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.Debugger       |getCurrentPid   - COMMAND Result : pid=137
+18:08:59.197 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_ATTACHED_PID [0xF]
+18:08:59.201 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pid->long:LONG=0
+18:08:59.264 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_STATUS [0x1]
+18:08:59.268 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : status->byte:BYTE=1
+18:08:59.322 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : major->byte:BYTE=1
+18:08:59.323 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : minor->byte:BYTE=1
+18:08:59.323 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : patch->byte:BYTE=-97
+18:08:59.328 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_PIDS [0x10]
+18:08:59.382 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pids->class [J:LONG=[1, 2, 3, 4, 5, 6, 8, 81, 82, 83, 84, 85, 86, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 132, 133, 134, 135, 137]
+18:08:59.384 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_ATTACHED_PID [0xF]
+18:08:59.389 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pid->long:LONG=0
+18:09:16.158 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_CURRENT_PID [0xE]
+18:09:16.316 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pid->long:LONG=137
+18:09:16.367 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.Debugger       |getCurrentPid   - COMMAND Result : pid=137
+18:09:16.368 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_TITLEID [0x11]
+18:09:16.370 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=137
+18:09:16.375 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : tid->long:LONG=0x100D7B01AE58000
+18:09:16.432 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_TITLEID [0x11]
+18:09:16.432 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=137
+18:09:16.435 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : tid->long:LONG=0x100D7B01AE58000
+18:09:16.506 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_ATTACHED_PID [0xF]
+18:09:16.521 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pid->long:LONG=0
+18:09:16.571 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.Debugger       |attach          - COMMAND : Attach to pid :137
+18:09:16.571 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_ATTACH [0xA]
+18:09:16.572 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=137
+18:09:16.592 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_STATUS [0x1]
+18:09:16.727 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : status->byte:BYTE=2
+18:09:16.774 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : major->byte:BYTE=1
+18:09:16.774 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : minor->byte:BYTE=1
+18:09:16.774 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : patch->byte:BYTE=-97
+18:09:16.779 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_TITLEID [0x11]
+18:09:16.779 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=137
+18:09:16.784 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : tid->long:LONG=0x100D7B01AE58000
+18:09:16.837 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.Debugger       |query           - COMMAND : Query Memory Multi start:0, max:10000
+18:09:16.946 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.Debugger       |query           - COMMAND Result :501 memory info
+18:11:50.295 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_TITLEID [0x11]
+18:11:50.296 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=121
+18:11:50.301 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : tid->long:LONG=0x100000000000031
+18:11:57.866 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_TITLEID [0x11]
+18:11:57.868 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=137
+18:11:57.908 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : tid->long:LONG=0x100D7B01AE58000
+18:12:14.943 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_CONTINUE [0x8]
+18:12:18.262 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_PAUSE [0x9]
+18:12:28.046 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_ATTACHED_PID [0xF]
+18:12:28.318 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pid->long:LONG=137
+18:12:28.371 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_DETATCH [0xB]
+18:12:30.879 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_PIDS [0x10]
+18:12:31.136 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pids->class [J:LONG=[1, 2, 3, 4, 5, 6, 8, 81, 82, 83, 84, 85, 86, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 132, 133, 134, 135, 137]
+18:12:32.158 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_TITLEID [0x11]
+18:12:32.158 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=137
+18:12:32.313 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : tid->long:LONG=0x100D7B01AE58000
+18:12:34.349 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_ATTACHED_PID [0xF]
+18:12:34.463 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : pid->long:LONG=0
+18:12:34.522 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.Debugger       |attach          - COMMAND : Attach to pid :137
+18:12:34.523 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_ATTACH [0xA]
+18:12:34.523 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=137
+18:12:34.536 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_STATUS [0x1]
+18:12:34.669 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : status->byte:BYTE=2
+18:12:34.727 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : major->byte:BYTE=1
+18:12:34.728 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : minor->byte:BYTE=1
+18:12:34.728 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : patch->byte:BYTE=-97
+18:12:34.729 [JavaFX Application Thread] INFO  me.mdbell.noexs.core.DebuggerUtils  |runCommand      - Running command : COMMAND_GET_TITLEID [0x11]
+18:12:34.730 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |writeRecord     - Field Write : pid->long:LONG=137
+18:12:34.734 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.DebuggerUtils  |readRecord      - Field Read : tid->long:LONG=0x100D7B01AE58000
+18:12:34.792 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.Debugger       |query           - COMMAND : Query Memory Multi start:0, max:10000
+18:12:34.887 [JavaFX Application Thread] DEBUG me.mdbell.noexs.core.Debugger       |query           - COMMAND Result :493 memory info

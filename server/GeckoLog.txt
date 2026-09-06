@@ -1,0 +1,76 @@
+Starting Gecko gateway
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:61
+Command [0x11]: _get_titleid => PID:89,Title ID:0x100d7b01ae58000
+Command [0x11]: _get_titleid => PID:87,Title ID:0x10000000000100c
+Command [0x11]: _get_titleid => PID:89,Title ID:0x100d7b01ae58000
+Command [0x11]: _get_titleid => PID:87,Title ID:0x10000000000100c
+Command [0x11]: _get_titleid => PID:89,Title ID:0x100d7b01ae58000
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787231868Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787231868Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:61
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=0Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x10]: _list_pids => NB pids:61
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=0Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:61
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=0Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x10]: _list_pids => NB pids:61
+Command [0x11]: _get_titleid => PID:89,Title ID:0x100d7b01ae58000
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787231868Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787231868Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x0B]: _detatch
+Command : _disconnect
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787351624Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:61
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=0Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x11]: _get_titleid => PID:0,Title ID:0x0
+Command [0x10]: _list_pids => NB pids:61
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=0Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:61
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=0Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:61
+Command [0x11]: _get_titleid => PID:1,Title ID:0x0
+Command [0x11]: _get_titleid => PID:89,Title ID:0x100d7b01ae58000
+Command [0x11]: _get_titleid => PID:87,Title ID:0x10000000000100c
+Command [0x11]: _get_titleid => PID:86,Title ID:0x100000000001000
+Command [0x11]: _get_titleid => PID:85,Title ID:0x100000000000035
+Command [0x11]: _get_titleid => PID:84,Title ID:0x420000000007e51a
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787231868Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:62
+Command [0x11]: _get_titleid => PID:58,Title ID:0x10000000000d609
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787231868Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:62
+Command [0x11]: _get_titleid => PID:59,Title ID:0x100000000000007
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787231868Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:62
+Command [0x11]: _get_titleid => PID:56,Title ID:0x100000000000006
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787231868Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:62
+Command [0x0B]: _detatch
+Command : _disconnect
+Command [0x0E]: _current_pid => DMNT has cheat:0
+Command : _current_pid => getting pid from nsdev pid=260787351624Command [0x01]: _status => Status:1,Version:1.1.157
+Command [0x10]: _list_pids => NB pids:62
+Command [0x11]: _get_titleid => PID:56,Title ID:0x100000000000006
+Command [0x11]: _get_titleid => PID:8a,Title ID:0x10000000000100d
+Command [0x0A]: _attach => Pid:138,Status;1

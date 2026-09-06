@@ -8,3 +8,8 @@ Cheats N Shit
 * Build noexs
 * Copy noexs.kip1 to root of SD card
 * Update hekate ini to use noexs.kip1
+
+
+## Dev Env Windows
+* https://switchbrew.org/wiki/Setting_up_Development_Environment
+ 

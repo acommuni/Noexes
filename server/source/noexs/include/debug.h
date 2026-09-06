@@ -3,6 +3,7 @@
 #include <switch.h>
 #include <functional>
 #include <list>
+#include <cstring> 
 
 #define DEBUG_DATA_SIZE (0x30)
 

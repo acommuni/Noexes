@@ -11,6 +11,8 @@ import org.apache.logging.log4j.Logger;
 
 import me.mdbell.noexs.core.debugger.EDebCommand;
 import me.mdbell.noexs.core.debugger.EDebDataType;
+import me.mdbell.noexs.core.debugger.format.AFormatField;
+import me.mdbell.noexs.core.debugger.format.EFormatRecord;
 
 public class DebuggerUtils {
 
@@ -34,9 +36,22 @@ public class DebuggerUtils {
             } else {
                 dt = EDebDataType.getDatatype(type);
                 value = dt.getReadValueMethod().apply(connection);
+
             }
             values.add(value);
-            logger.debug("Field Read : {}->{}:{}={}", rc.getName(), rc.getType(), dt, value);
+
+            Object formatedValue = value;
+            AFormatField aff = rc.getAnnotation(AFormatField.class);
+            if (aff != null) {
+                EFormatRecord efr = aff.value();
+                formatedValue = efr.getTransformer().apply(value);
+            } else {
+                if (type == byte.class) {
+                    formatedValue = ((Byte) value) & 0xFFL;
+                }
+            }
+
+            logger.debug("Field Read : {}->{}:{}={}", rc.getName(), rc.getType(), dt, formatedValue);
         }
 
         T res = null;
@@ -63,7 +78,7 @@ public class DebuggerUtils {
     }
 
     public static <T extends Record> T runCommand(IConnection connection, EDebCommand command, Object input) {
-        logger.info("Running command : {}", command);
+        logger.info("Running command : {} [0x{}]", command, Long.toHexString(command.getCode()).toUpperCase());
         connection.writeCommand(command.getCode());
         if (command.getInputRecord() != null) {
             DebuggerUtils.writeRecord(connection, command.getInputRecord(), input);
