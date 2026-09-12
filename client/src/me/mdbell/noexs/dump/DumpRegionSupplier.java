@@ -25,6 +25,11 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
     }
 
     public static DumpRegionSupplier createSupplier(long start, long end, List<DumpRegion> regions, long size) {
+        long nbRegions = regions.size();
+        for (DumpRegion dr : regions) {
+            dr.setTotal(nbRegions);
+        }
+
         return new DumpRegionSupplier() {
             int i = 0;
 
@@ -121,7 +126,7 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
                     }
                     curr = info[i++];
                 } while (!filter.apply(curr));
-                return new DumpRegion(curr.getAddress(), curr.getNextAddress());
+                return new DumpRegion(curr.getAddress(), curr.getNextAddress(), i, info.length);
             }
         };
     }
@@ -161,7 +166,8 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
                 if (curr.getAddress() >= end) {
                     return null;
                 }
-                return new DumpRegion(Math.max(curr.getAddress(), start), Math.min(curr.getNextAddress(), end));
+                return new DumpRegion(Math.max(curr.getAddress(), start), Math.min(curr.getNextAddress(), end), i,
+                        info.length);
             }
         };
     }
@@ -190,7 +196,7 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
             public String getDescription() {
                 return "2 ranges:zone1[" + HexUtils.formatAddress(zone1start) + "," + HexUtils.formatAddress(zone1end)
                         + "],zone2[" + HexUtils.formatAddress(zone2start) + "," + HexUtils.formatAddress(zone2end)
-                        + "], size="+getSize();
+                        + "], size=" + getSize();
             }
 
             MemoryInfo[] info;
@@ -214,7 +220,8 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
                 }
                 return new DumpRegion(
                         Math.min(Math.max(curr.getAddress(), zone1start), Math.max(zone2start, curr.getAddress())),
-                        Math.max(Math.min(curr.getNextAddress(), zone2end), Math.min(zone1end, curr.getNextAddress())));
+                        Math.max(Math.min(curr.getNextAddress(), zone2end), Math.min(zone1end, curr.getNextAddress())),
+                        0, 0);
             }
         };
     }

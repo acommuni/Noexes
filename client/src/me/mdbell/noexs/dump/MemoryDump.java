@@ -151,8 +151,9 @@ public class MemoryDump implements Closeable {
 
     public List<DumpRegion> getIndicesAsRegions() {
         List<DumpRegion> res = new ArrayList<>();
+        int i = 0;
         for (DumpIndex idx : indices) {
-            res.add(new DumpRegion(idx.getAddress(), idx.getEndAddress()));
+            res.add(new DumpRegion(idx.getAddress(), idx.getEndAddress(), i, indices.size()));
         }
         return res;
     }

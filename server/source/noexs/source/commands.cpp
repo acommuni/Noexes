@@ -354,6 +354,16 @@ static Result _querymem_multi(Gecko::Context& ctx) {
 //0x0E
 static Result _current_pid(Gecko::Context& ctx){
     u64 pid;
+    Result rc = pmdmntGetApplicationProcessId(&pid);
+    WRITE_CHECKED(ctx, pid);
+    printf("Command [0x0E]: _current_pid => PID:%lx\n",pid);
+    return rc;
+}
+
+
+//0x0E
+static Result _current_pid2(Gecko::Context& ctx){
+    u64 pid;
     bool dmnthascht;
     Result rc;    
     dmntchtHasCheatProcess(&dmnthascht);
@@ -364,7 +374,7 @@ static Result _current_pid(Gecko::Context& ctx){
         pid = cht.process_id;
         printf("Command : _current_pid => Current DMNT PID:%lx\n",pid);
     } else rc = pmdmntGetApplicationProcessId(&pid);
-    printf("Command [0x0E]: _current_pid => rc:%d\n",rc);
+    printf("Command [0x0E]: _current_pid => rc:%d\n,pid:%lx",rc,pid);
     if (rc != 0) {
         rc = nsdevInitialize();
         if (rc == 0) {

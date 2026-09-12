@@ -343,7 +343,7 @@ public class MemorySearchService extends Service<SearchResult> {
                     end = addr;
                 }
                 if (factory == null) {
-                    factory = DumpRegionFactory.create().setStart(addr).setLength(dataType.getSize());
+                    factory = DumpRegionFactory.create().setStart(addr).setLength(dataType.getSize()).setIndex(i);
                     info = getInfo(infos, addr);
                 } else {
                     long delta = addr - factory.getEnd();
@@ -352,7 +352,7 @@ public class MemorySearchService extends Service<SearchResult> {
                     } else {
                         size += factory.getLength();
                         regions.add(factory.build());
-                        factory = DumpRegionFactory.create().setStart(addr).setLength(dataType.getSize());
+                        factory = DumpRegionFactory.create().setStart(addr).setLength(dataType.getSize()).setIndex(i);
                         info = getInfo(infos, addr);
                     }
                 }

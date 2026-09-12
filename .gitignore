@@ -20,3 +20,13 @@ client/resources/me/mdbell/noexs/code/parser/*.java
 client/docs/~$Button.xlsx
 client/logs
 /atmosphere/crashes
+/server/source/noexs
+server/source/noexs/noexs.nso
+server/source/noexs/noexs.nsp
+server/source/noexs/exefs.nsp
+server/source/noexs/noexs.npdm
+server/source/noexs/noexs.nso
+server/source/noexs/noexs.nsp
+server/source/noexs/noexs.npdm
+server/source/noexs/noexs.nso
+server/source/noexs/noexs.nsp

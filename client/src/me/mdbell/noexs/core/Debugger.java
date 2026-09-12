@@ -64,6 +64,7 @@ public class Debugger implements Commands, Closeable {
 
             this.protocolVersion = (major << 16) | (minor << 8);
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 throw new ConnectionException("This is impossible, so you've done something terribly wrong", rc);
             }
@@ -98,6 +99,7 @@ public class Debugger implements Commands, Closeable {
 
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE8, new RDebPoke8Input(addr, (byte) value));
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
@@ -115,6 +117,7 @@ public class Debugger implements Commands, Closeable {
         try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE16, new RDebPoke16Input(addr, (short) value));
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
@@ -131,6 +134,7 @@ public class Debugger implements Commands, Closeable {
         try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE32, new RDebPoke32Input(addr, (int) value));
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
@@ -146,6 +150,7 @@ public class Debugger implements Commands, Closeable {
         try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE64, new RDebPoke64Input(addr, (long) value));
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
@@ -188,6 +193,7 @@ public class Debugger implements Commands, Closeable {
                 rc = setBreakpoint(0x10 + id, wp.getFlag(), addr); // wp
                 System.out.println("wp:" + rc);
             }
+            logger.debug("COMMAND Result : rc={}", rc);
             return rc;
         }
     }
@@ -211,6 +217,7 @@ public class Debugger implements Commands, Closeable {
             conn.writeInt(len);
             conn.flush();
             Result r = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", r);
             if (r.succeeded()) {
                 conn.write(data, off, len);
                 conn.flush();
@@ -237,6 +244,9 @@ public class Debugger implements Commands, Closeable {
             conn.flush();
 
             Result rc = conn.readResult();
+            if (rc.failed()) {
+                logger.debug("COMMAND Result : rc={}", rc);
+            }
             if (rc.succeeded()) {
                 // try (BufferedOutputStream bufferedWriter = new BufferedOutputStream(to)) {
                 byte[] buffer = new byte[2048 * 4];
@@ -264,7 +274,9 @@ public class Debugger implements Commands, Closeable {
             conn.writeInt(size);
             conn.flush();
             Result rc = conn.readResult();
-
+            if (rc.failed()) {
+                logger.debug("COMMAND Result : rc={}", rc);
+            }
             if (rc.failed()) {
                 conn.readResult(); // ignored
                 throw new ConnectionException(rc);
@@ -346,7 +358,7 @@ public class Debugger implements Commands, Closeable {
                 }
             }
             conn.readResult(); // ignored here, it gets checked in readInfo()
-            logger.debug("COMMAND Result :{} memory info", count);
+            logger.debug("COMMAND query : read {} memory info", count);
             return Arrays.copyOf(res, count);
         }
     }
@@ -356,6 +368,7 @@ public class Debugger implements Commands, Closeable {
             RDebCurrentPidOutput currentPid = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_CURRENT_PID);
             long pid = currentPid.pid();
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 pid = 0;
             }
@@ -369,6 +382,7 @@ public class Debugger implements Commands, Closeable {
             RDebGetAttachedPidOutput attachedPid = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_GET_ATTACHED_PID);
             long pid = attachedPid.pid();
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 throw new ConnectionException("This is impossible, so you've done something terribly wrong", rc);
             }
@@ -382,6 +396,7 @@ public class Debugger implements Commands, Closeable {
             RDebGetPidsOutput getPids = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_GET_PIDS);
             long[] pids = getPids.pids();
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
@@ -395,8 +410,10 @@ public class Debugger implements Commands, Closeable {
                     new RDebGetTitleIdInput(pid));
             long tid = res.tid();
             Result rc = conn.readResult();
+            logger.debug("COMMAND Result : rc={}", rc);
             if (rc.failed()) {
                 // TODO throw? idk
+
             }
             return tid;
         }
@@ -513,7 +530,7 @@ public class Debugger implements Commands, Closeable {
         if (res.failed()) {
             throw new ConnectionException(failureReason, res);
         }
-
+        logger.debug("COMMAND Result : rc={}", res);
         return res;
     }
 

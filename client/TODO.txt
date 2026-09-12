@@ -17,8 +17,10 @@
 
 -> Menu du wathc list vers pointer, idem pour memory viewer
 
--> Taille totale incorrecte lors de la recherche
+-> Taille totale incorrecte lors de la recherche (Rayman => 150GB => Message Dumping - DL) => Certinae regions sont sauter. Prendre en compte des le calcul de la taille memoier
 -> DumpRegions ajouter info region pour tracer
+
+-> Classe Result : ajouter les enum pour les erreurs
 
 -> Nouvelles recherche sur un dump existant 
 -> Dump relative sans le suffix a corriger

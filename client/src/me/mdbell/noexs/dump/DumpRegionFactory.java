@@ -4,6 +4,8 @@ public class DumpRegionFactory {
 
     private long start;
     private long end;
+    private long index;
+    private long total = 0;
 
     private DumpRegionFactory() {
 
@@ -16,6 +18,16 @@ public class DumpRegionFactory {
 
     public DumpRegionFactory setStart(long start) {
         this.start = start;
+        return this;
+    }
+
+    public DumpRegionFactory setIndex(long index) {
+        this.index = index;
+        return this;
+    }
+
+    public DumpRegionFactory setTotal(long total) {
+        this.total = total;
         return this;
     }
 
@@ -41,6 +53,6 @@ public class DumpRegionFactory {
     }
 
     public DumpRegion build() {
-        return new DumpRegion(start, end);
+        return new DumpRegion(start, end, index, total);
     }
 }

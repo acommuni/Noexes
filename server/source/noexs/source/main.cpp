@@ -35,29 +35,30 @@ void __libnx_initheap(void) {
 	fake_heap_end   = (char*)addr + size;
 }
 
+
+// See : https://github.com/switchbrew/libnx/blob/master/nx/source/runtime/init.c#L112
 void __appInit(void) {
 	Result rc;
 
-    
+    rc = smInitialize();
+	if (R_FAILED(rc)) {
+		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_InitFail_SM));
+	}
+
+    if (hosversionGet() == 0) {
         rc = setsysInitialize();
         if (R_SUCCEEDED(rc)) {
             SetSysFirmwareVersion fw;
             rc = setsysGetFirmwareVersion(&fw);
             if (R_SUCCEEDED(rc))
-                hosversionSet((BIT(31)) | (MAKEHOSVERSION(fw.major, fw.minor, fw.micro)));
+                hosversionSet(MAKEHOSVERSION(fw.major, fw.minor, fw.micro));
             setsysExit();
         }
-        if (rc!=0) {
-            printf("version set failed rc=%d",rc);
-            hosversionSet(6);
-        };
-    // SetSysFirmwareVersion hosversion;
-    // rc = setsysGetFirmwareVersion(&hosversion);
-    // hosversionSet(hosversion.major);
-	/* Initialize services */
-	rc = smInitialize();
+    }
+
+    rc = ldrDmntInitialize();
 	if (R_FAILED(rc)) {
-		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_InitFail_SM));
+		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized));
 	}
 
 	rc = pmdmntInitialize();
@@ -70,10 +71,7 @@ void __appInit(void) {
 		fatalThrow(rc);
 	}
     
-	rc = ldrDmntInitialize();
-	if (R_FAILED(rc)) {
-		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized));
-	}
+	
 	// rc = nsdevInitialize();
 	// if (R_FAILED(rc)) {
 	// 	// fatalThrow(MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized));

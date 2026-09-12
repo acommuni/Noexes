@@ -52,7 +52,10 @@ void convertToGeckoDebugEvent(const DebugEventInfo* src, Gecko::DebugEvent* dest
             //TODO : champs sup
 
             // Traiter l'union specific
-           /* switch (src.info.exception.type) {
+           /*switch (src->info.exception.type) {
+
+
+                /*
                 case DebugException_UndefinedInstruction: {
                     dest->info.exception.specific.undefined_instruction.insn =
                         src.info.exception.specific.undefined_instruction.insn;
@@ -67,14 +70,14 @@ void convertToGeckoDebugEvent(const DebugEventInfo* src, Gecko::DebugEvent* dest
                     dest->info.exception.specific.alignment_fault.address =
                         src.info.exception.specific.alignment_fault.address;
                     break;
-                }
+                }/*
                 case DebugException_BreakPoint: {
-                    dest->info.exception.specific.break_point.type =
-                        src.info.exception.specific.break_point.type;
-                    dest->info.exception.specific.break_point.address =
-                        src.info.exception.specific.break_point.address;
+                    dest->data.exception.type =
+                        src->info.exception.specific.break_point.type;
+                    dest->data.exception.fault_reg =
+                        src->info.exception.specific.break_point.address;
                     break;
-                }
+                }     
                 case DebugException_UserBreak: {
                     dest->info.exception.specific.user_break.break_reason =
                         src.info.exception.specific.user_break.break_reason;
@@ -98,7 +101,7 @@ void convertToGeckoDebugEvent(const DebugEventInfo* src, Gecko::DebugEvent* dest
                     break;
                 }
                 default: {
-                    dest->info.exception.specific.raw = src.info.exception.specific.raw;
+                    dest->data.exception.per_exception = src.info.exception.specific.raw;
                     break;
                 }
             }*/
