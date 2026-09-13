@@ -2,7 +2,6 @@ package me.mdbell.noexs.ui;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 
@@ -10,9 +9,8 @@ import org.apache.commons.lang3.StringUtils;
 
 public class NoexesFiles {
 
-    
     private static DateTimeFormatter FILENAME_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS");
-    
+
     private NoexesFiles() {
 
     }
@@ -25,11 +23,15 @@ public class NoexesFiles {
         }
     }
 
-    public static File createTempFile(TemporalAccessor time, String suffix, String ext) throws IOException {
-                
+    public static File createTempFile(TemporalAccessor time, long tid, String suffix, String ext) throws IOException {
+
         String filename = "" + FILENAME_DATE_FORMATTER.format(time);
 
-               // System.currentTimeMillis();
+        if (tid != 0) {
+            String tidToString = String.format("%016X", tid);
+            filename += "_" + tidToString;
+        }
+        // System.currentTimeMillis();
         if (StringUtils.isNotBlank(suffix)) {
             filename += "_" + suffix;
         }

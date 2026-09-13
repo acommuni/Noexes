@@ -285,11 +285,11 @@ public class SearchController implements IController {
                 right = prevName;
                 break;
             case KNOWN:
-                right = value;
+                right = "0x"+ value;
                 break;
             case DIFFERENT:
                 left = "|" + currentName + " - " + prevName + "|";
-                right = value;
+                right = "0x"+ value;
                 break;
             default:
                 conditionLabel.setText("Invalid/Unknown condition!");

@@ -41,6 +41,9 @@ public final class SearchResult implements Closeable {
     DataType dataType;
     SearchType type;
 
+    TemporalAccessor time = null;
+    String suffix = null;
+
     ConditionType compareType;
     long knownValue;
 
@@ -50,15 +53,26 @@ public final class SearchResult implements Closeable {
 
     private SearchResult prev;
 
-    public SearchResult(TemporalAccessor time, String suffix) throws IOException {
-        this.location = NoexesFiles.createTempFile(time, suffix, "dmp");
+    public SearchResult(TemporalAccessor time, String suffix) {
+        this.time = time;
+        this.suffix = suffix;
     }
 
     private SearchResult() {
 
     }
 
-    public File getLocation() {
+    private File getLocation() throws IOException {
+        if (location == null && time != null && suffix != null) {
+            this.location = NoexesFiles.createTempFile(time, 0, suffix, "dmp");
+        }
+        return location;
+    }
+
+    public File getLocation(long tid) throws IOException {
+        if (location == null && time != null && suffix != null) {
+            this.location = NoexesFiles.createTempFile(time, tid, suffix, "dmp");
+        }
         return location;
     }
 

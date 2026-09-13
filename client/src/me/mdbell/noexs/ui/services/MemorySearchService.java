@@ -194,7 +194,7 @@ public class MemorySearchService extends Service<SearchResult> {
 
     private class SearchTask extends Task<SearchResult> {
 
-        private static final int DUMP_FRAGMENT_SIZE = 200_000_000;
+        private static final int DUMP_FRAGMENT_SIZE = 50_000_000;
         // private static final int DUMP_BUFFER_SIZE = 10000;
         private static final int DUMP_BUFFER_SIZE = 10000;
         SearchResult res;
@@ -217,13 +217,14 @@ public class MemorySearchService extends Service<SearchResult> {
             logger.debug("Do serach, fullsearch : {}", fullSearch);
 
             if (fullSearch) {
-                fileDumpSuffixFinal = StringUtils.appendIfMissing(fileDumpSuffixFinal, "_full");
+                fileDumpSuffixFinal = StringUtils.appendIfMissing(fileDumpSuffixFinal, "full");
             }
             res = new SearchResult(time, fileDumpSuffixFinal);
             res.type = type;
             res.dataType = dataType;
             res.setPrev(prevResult);
-            res.addresses = createList(NoexesFiles.createTempFile(time, fileDumpSuffixFinal, "addrs"));
+            long tid = conn.getCurrentTitleId();
+            res.addresses = createList(NoexesFiles.createTempFile(time, tid, fileDumpSuffixFinal, "addrs"));
             res.compareType = compareType;
             res.knownValue = knownValue;
 
@@ -405,7 +406,7 @@ public class MemorySearchService extends Service<SearchResult> {
             long startOfDump = System.currentTimeMillis();
 
             DebuggerStatus currentStatus = conn.getStatus();
-            boolean resume = currentStatus == DebuggerStatus.PAUSED;
+            boolean resume = currentStatus == DebuggerStatus.RUNNING;
             logger.debug("Current status : {}, Resume after creating the dump : {}", currentStatus, resume);
 
             // pause the game
@@ -424,7 +425,7 @@ public class MemorySearchService extends Service<SearchResult> {
             DumpOutputStream doutRaw;
             try {
                 long tid = conn.getCurrentTitleId();
-                File location = res.getLocation();
+                File location = res.getLocation(tid);
                 logger.info("Create dump : {} for tid : {} with supplier : {}", location, tid,
                         supplier.getDescription());
                 dump = new MemoryDump(location);

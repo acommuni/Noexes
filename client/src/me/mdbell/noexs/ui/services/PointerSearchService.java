@@ -111,7 +111,7 @@ public class PointerSearchService extends Service<List<PointerSearchResult>> {
                     logger.info("Compute root node at depth : {}, nb results : {}", depth, results[depth].size());
                     resultsNode[depth] = PointerSearchResultNode.buildRootTree(results[depth], MAX_ITEMS_PER_NODE);
 
-                    dumpPtrsToFile(depth, results);
+                    dumpPtrsToFile(depth, results, dump.getTid());
                 }
 
                 List<PointerSearchResult> res = new ArrayList<>();
@@ -126,9 +126,9 @@ public class PointerSearchService extends Service<List<PointerSearchResult>> {
         }
     }
 
-    private void dumpPtrsToFile(int depth, List<PointerSearchResult>[] results) throws IOException {
+    private void dumpPtrsToFile(int depth, List<PointerSearchResult>[] results, long tid) throws IOException {
         if (dumpSearch) {
-            File tmpFile = NoexesFiles.createTempFile(time, "debug_ptr_" + depth, "dptr");
+            File tmpFile = NoexesFiles.createTempFile(time, tid, "debug_ptr_" + depth, "dptr");
             logger.info("Dumping file [depth={}]: {}", depth, tmpFile.getPath());
             FileUtils.write(tmpFile, "Ptr search : " + HexUtils.formatAddress(address) + " Depth : " + depth + "\n",
                     "UTF-8", true);
