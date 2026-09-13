@@ -148,6 +148,14 @@ public class SearchController implements IController {
             pokeValue.setSize(size);
         });
 
+        floatValue.setOnAction(event -> {
+            convertValueToHex(event);
+        });
+
+        conversionType.setOnAction(event -> {
+            convertValueToHex(event);
+        });
+
         searchConditionTypeDropdown.getItems().addAll(SearchType.values());
         searchConditionTypeDropdown.getSelectionModel().select(SearchType.KNOWN); // Default is SPEC Value
 
@@ -538,7 +546,7 @@ public class SearchController implements IController {
             mc.setStatus("Search failed!");
             Throwable t = value.getSource().getException();
             t.printStackTrace();
-            logger.error("Search filaure", t);
+            logger.error("Search failure", t);
             MainController.showMessage(t);
             searchOptions.setDisable(false);
         });

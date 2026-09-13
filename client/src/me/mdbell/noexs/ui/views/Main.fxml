@@ -18,22 +18,22 @@
       <AnchorPane layoutY="495.0" prefHeight="71.0" prefWidth="1020.0">
          <children>
             <Button fx:id="connectBtn" layoutX="885.0" layoutY="39.0" mnemonicParsing="false" onAction="#connect" prefHeight="10.0" prefWidth="121.0" text="Connect" />
-            <Button fx:id="newConnectBtn" layoutX="829.0" layoutY="10.0" mnemonicParsing="false" onAction="#newConnect" prefHeight="25.0" prefWidth="74.0" text="Connect" />
-            <Button fx:id="newDisconnectBtn" layoutX="913.0" layoutY="10.0" mnemonicParsing="false" onAction="#newDisconnect" prefHeight="25.0" prefWidth="82.0" text="Disconnect" />
+            <Button fx:id="newConnectBtn" layoutX="847.0" layoutY="9.0" mnemonicParsing="false" onAction="#newConnect" prefHeight="25.0" prefWidth="74.0" text="Connect" />
+            <Button fx:id="newDisconnectBtn" layoutX="925.0" layoutY="10.0" mnemonicParsing="false" onAction="#newDisconnect" prefHeight="25.0" prefWidth="82.0" text="Disconnect" />
             <TextField fx:id="ipAddr" layoutX="737.0" layoutY="39.0" prefHeight="25.0" prefWidth="142.0" text="111.111.111.111" />
-            <Label layoutX="737.0" layoutY="15.0" text="IP Address" />
-            <ProgressBar fx:id="progressBar" layoutX="11.0" layoutY="44.0" prefHeight="17.0" prefWidth="558.0" progress="0.0">
+            <Label layoutX="757.0" layoutY="15.0" text="IP Address" />
+            <ProgressBar fx:id="progressBar" layoutX="11.0" layoutY="44.0" prefHeight="17.0" prefWidth="451.0" progress="0.0">
                <effect>
                   <ColorAdjust hue="-0.52" />
                </effect>
             </ProgressBar>
-            <Label fx:id="statusLbl" layoutX="14.0" layoutY="24.0" text="Ready" />
-            <Label fx:id="progressLabel" layoutX="575.0" layoutY="43.0" text="0%" />
-            <Button fx:id="pauseBtn" layoutX="357.0" layoutY="12.0" mnemonicParsing="false" onAction="#pauseGame" text="Pause" />
-            <Button layoutX="411.0" layoutY="12.0" mnemonicParsing="false" onAction="#continueProcess" text="Resume" />
+            <Label fx:id="statusLbl" layoutX="14.0" layoutY="19.0" text="Ready" />
+            <Label fx:id="progressLabel" layoutX="473.0" layoutY="43.0" text="0%" />
+            <Button fx:id="pauseBtn" layoutX="499.0" layoutY="39.0" mnemonicParsing="false" onAction="#pauseGame" text="Pause" />
+            <Button layoutX="553.0" layoutY="39.0" mnemonicParsing="false" onAction="#continueProcess" text="Resume" />
             <ChoiceBox fx:id="connectionType" layoutX="622.0" layoutY="39.0" prefHeight="25.0" prefWidth="107.0" />
-            <CheckBox fx:id="autoResume" layoutX="477.0" layoutY="15.0" mnemonicParsing="false" text="Auto Resume" />
-            <CheckBox fx:id="autoAttach" layoutX="630.0" layoutY="14.0" mnemonicParsing="false" selected="true" text="Auto attach" />
+            <CheckBox fx:id="autoResume" layoutX="553.0" layoutY="15.0" mnemonicParsing="false" text="Auto Resume" />
+            <CheckBox fx:id="autoAttach" layoutX="655.0" layoutY="14.0" mnemonicParsing="false" selected="true" text="Auto attach" />
          </children>
       </AnchorPane>
       <Separator layoutY="490.0" prefHeight="17.0" prefWidth="1020.0" />

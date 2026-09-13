@@ -56,6 +56,7 @@ public class MemorySearchService extends Service<SearchResult> {
     private String fileDumpSuffix;
 
     public void clear() {
+        logger.debug("Clear search");
         supplier = null;
         conn = null;
         provider = null;
@@ -193,6 +194,7 @@ public class MemorySearchService extends Service<SearchResult> {
 
     private class SearchTask extends Task<SearchResult> {
 
+        private static final int DUMP_FRAGMENT_SIZE = 200_000_000;
         // private static final int DUMP_BUFFER_SIZE = 10000;
         private static final int DUMP_BUFFER_SIZE = 10000;
         SearchResult res;
@@ -212,6 +214,8 @@ public class MemorySearchService extends Service<SearchResult> {
             LocalDateTime time = LocalDateTime.now();
             String fileDumpSuffixFinal = fileDumpSuffix;
             boolean fullSearch = prevResult == null;
+            logger.debug("Do serach, fullsearch : {}", fullSearch);
+
             if (fullSearch) {
                 fileDumpSuffixFinal = StringUtils.appendIfMissing(fileDumpSuffixFinal, "_full");
             }
@@ -236,22 +240,29 @@ public class MemorySearchService extends Service<SearchResult> {
 
         private void update(long size) {
             curr += size;
-            if (System.currentTimeMillis() - lastUpdate > 500) {
-                lastUpdate = System.currentTimeMillis();
-                avg.add(curr - prevAmt);
+            long currentTS = System.currentTimeMillis();
+            long deltaTS = currentTS - lastUpdate;
+            if (deltaTS > 500) {
+                avg.add(curr - prevAmt, deltaTS);
+                lastUpdate = currentTS;
                 prevAmt = curr;
             }
-            double average = avg.getAverage() * 2;
+
+            double trueAverage = avg.getAverage();
             long remaining = total - curr;
-            updateMessage(String.format("Refining... (%s/%s) ETA: %s", curr, total,
-                    TimeUtils.formatTime((long) (remaining / average * 1000))));
+            double eta = 0;
+            if (trueAverage > 0) {
+                eta = remaining / trueAverage * 1000;
+            }
+
+            updateMessage(String.format("Refining... (%s/%s) ETA: %s", curr, total, TimeUtils.formatTime((long) eta)));
             updateProgress(curr, total);
         }
 
         private void refineSearch() throws IOException {
             updateMessage("Computing regions...");
             DumpRegionSupplier supplier = computeRegions(prevResult);
-            res.curr = createDump(res, supplier);
+            res.curr = createDump(res, supplier, false);
             total = prevResult.curr.getSize();
 
             if (prevResult.addresses.size() == 0) {
@@ -285,7 +296,7 @@ public class MemorySearchService extends Service<SearchResult> {
         }
 
         private void fullSearch() throws Exception {
-            res.curr = createDump(res, supplier);
+            res.curr = createDump(res, supplier, true);
 
             if (isCancelled()) {
                 return;
@@ -300,7 +311,10 @@ public class MemorySearchService extends Service<SearchResult> {
             }
 
             List<DumpIndex> indices = res.curr.getIndices();
-            long read = 0;
+            // long read = 0;
+            // TODO : comprendre pourquoi cette valeur header ?
+            long read = 3026;
+
             long size = res.curr.getSize();
             long start = supplier.getStart();
             for (DumpIndex idx : indices) {
@@ -315,8 +329,11 @@ public class MemorySearchService extends Service<SearchResult> {
                 }
                 search(res, b, addr, provider);
                 read += b.position();
+                // TODO : comprendre pourquoi cette valeur , taille par region (mini header ?)
+                read += 24;
                 updateProgress(read, size);
             }
+            logger.debug("Search=>Size:{},Read:{},Diff:{},Nb Region:{}", size, read, size - read, indices.size());
             return;
         }
 
@@ -357,11 +374,16 @@ public class MemorySearchService extends Service<SearchResult> {
                     }
                 }
             }
+            long nbRegions = regions.size();
             if (factory != null) {
                 size += factory.getLength();
                 regions.add(factory.build());
+                for (DumpRegion dr : regions) {
+                    dr.setTotal(nbRegions);
+                }
             }
-            updateMessage(regions.size() + " regions computed.");
+            updateMessage(nbRegions + " regions computed.");
+            logger.debug("Regions computed : {}", nbRegions);
             return DumpRegionSupplier.createSupplier(start, end, regions, size);
         }
 
@@ -374,21 +396,30 @@ public class MemorySearchService extends Service<SearchResult> {
             return null;
         }
 
-        MemoryDump createDump(SearchResult res, DumpRegionSupplier supplier) throws IOException {
+        MemoryDump createDump(SearchResult res, DumpRegionSupplier supplier, boolean showDumpInfo) throws IOException {
             logger.info("Create dump for search : {}", res);
+
             if (NoexesFiles.getTempDir().getFreeSpace() < supplier.getSize()) {
                 throw new IOException("Not enough free space for dump!");
             }
-            boolean resume = conn.getStatus() == DebuggerStatus.PAUSED;
+            long startOfDump = System.currentTimeMillis();
+
+            DebuggerStatus currentStatus = conn.getStatus();
+            boolean resume = currentStatus == DebuggerStatus.PAUSED;
+            logger.debug("Current status : {}, Resume after creating the dump : {}", currentStatus, resume);
 
             // pause the game
             conn.pause();
 
             long totalSize = supplier.getSize();
-            long lastUpdate = 0;
+
+            long unreadTotalSize = 0;
+            // long lastUpdate = 0;
+            long lastUpdate = System.currentTimeMillis();
             long prevRead = 0;
             Rolling avg = new Rolling(10);
             long read = 0;
+            long realRead = 0;
             MemoryDump dump;
             DumpOutputStream doutRaw;
             try {
@@ -408,41 +439,88 @@ public class MemorySearchService extends Service<SearchResult> {
             try (BufferedOutputStream dout = new BufferedOutputStream(doutRaw, 1024 * 1024)) {
                 while (!isCancelled()) {
                     DumpRegion r = supplier.get();
-                    logger.debug("Dumping region : {}", r);
                     if (r == null) {
                         break;
                     }
+
                     long size = r.getSize();
                     long addr = r.getStart();
-                    while (size > 0 && !isCancelled()) {
-                        if (System.currentTimeMillis() - lastUpdate > 500) {
-                            avg.add(read - prevRead);
-                            prevRead = read;
-                            lastUpdate = System.currentTimeMillis();
+                    if (!r.isReadable()) {
+                        unreadTotalSize += size;
+                        if (showDumpInfo) {
+                            logger.debug("Not Dumping region (not readable) : {} =>size:{},addr:{}", r, size, addr);
                         }
-                        int len = (int) Math.min(size, 2_000_000);
+                        read += size;
+                        double trueAverage = avg.getAverage();
+                        long remaining = totalSize - read;
+                        double eta = 0;
+                        if (trueAverage > 0) {
+                            eta = remaining / trueAverage * 1000;
+                        }
+
+                        updateProgress(read, totalSize);
+                        // logger.debug("Update progress read:{},total:{},size:{},diff:{}", read,
+                        // totalSize, size, totalSize - read);
+                        updateMessage(String.format("Dumping - DL: %s/s T: %s R: %s ETA: %s",
+                                NetUtils.formatSize((long) (trueAverage)), NetUtils.formatSize(totalSize),
+                                NetUtils.formatSize(remaining), TimeUtils.formatTime((long) (eta))));
+
+                        continue;
+                    }
+                    if (showDumpInfo) {
+                        logger.debug("Dumping region : {} =>size:{},addr:{}", r, size, addr);
+                    }
+                    while (size > 0 && !isCancelled()) {
+                        long currentTS = System.currentTimeMillis();
+                        long deltaTS = currentTS - lastUpdate;
+                        if (deltaTS > 500) {
+                            avg.add(read - prevRead, deltaTS);
+                            prevRead = read;
+                            lastUpdate = currentTS;
+                        }
+                        int len = (int) Math.min(size, DUMP_FRAGMENT_SIZE);
                         doutRaw.setCurrentAddress(addr);
                         conn.readmem(addr, len, dout);
                         dout.flush();
                         size -= len;
                         addr += len;
                         read += len;
-                        double average = avg.getAverage() * 2;
+                        realRead += len;
+
+                        double trueAverage = avg.getAverage();
                         long remaining = totalSize - read;
+                        double eta = 0;
+                        if (trueAverage > 0) {
+                            eta = remaining / trueAverage * 1000;
+                        }
+
                         updateProgress(read, totalSize);
+                        // logger.debug("Update progress read:{},total:{},size:{},diff:{}", read,
+                        // totalSize, size,
+                        // totalSize - read);
                         updateMessage(String.format("Dumping - DL: %s/s T: %s R: %s ETA: %s",
-                                NetUtils.formatSize((long) (average)), NetUtils.formatSize(totalSize),
-                                NetUtils.formatSize(remaining),
-                                TimeUtils.formatTime((long) (remaining / average * 1000))));
+                                NetUtils.formatSize((long) (trueAverage)), NetUtils.formatSize(totalSize),
+                                NetUtils.formatSize(remaining), TimeUtils.formatTime((long) eta)));
 
                     }
                 }
             }
 
-            logger.debug("Dump finished");
+            long stopOfDump = System.currentTimeMillis();
+
+            long duration = (stopOfDump - startOfDump) / 1000;
+
+            float trougput = 0.0f;
+            if (duration > 0) {
+                trougput = (realRead / duration) / (1024 * 1024);
+            }
+
+            logger.debug("Dump finished (Real Read:{}, Unread:{}, Duration : {} s, Troughtput : {} Mb/s, Resume : {} )",
+                    realRead, unreadTotalSize, duration, trougput, resume);
             if (resume) {
                 conn.resume();
             }
+
             return isCancelled() ? null : dump;
         }
 

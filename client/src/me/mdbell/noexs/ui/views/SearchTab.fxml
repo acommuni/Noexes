@@ -10,6 +10,7 @@
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.TitledPane?>
 <?import javafx.scene.layout.AnchorPane?>
+<?import javafx.scene.text.Font?>
 <?import me.mdbell.javafx.control.AddressSpinner?>
 <?import me.mdbell.javafx.control.HexSpinner?>
 
@@ -39,14 +40,34 @@
                   <ComboBox fx:id="searchConditionTypeDropdown" layoutX="21.0" layoutY="134.0" prefHeight="25.0" prefWidth="130.0" />
                   <Label layoutX="21.0" layoutY="116.0" text="Search Condition" />
                   <ComboBox fx:id="searchConditionDropdown" layoutX="21.0" layoutY="164.0" prefHeight="25.0" prefWidth="130.0" />
-                  <HexSpinner fx:id="knownValue" editable="true" layoutX="356.0" layoutY="89.0" prefHeight="25.0" prefWidth="149.0" />
-                  <Label layoutX="356.0" layoutY="72.0" text="Value" />
+                  <HexSpinner fx:id="knownValue" editable="true" layoutX="311.0" layoutY="122.0" prefHeight="25.0" prefWidth="149.0" />
+                  <Label layoutX="164.0" layoutY="124.0" text="Value to search (Hex)" textFill="#03a103">
+                     <font>
+                        <Font name="System Bold" size="12.0" />
+                     </font></Label>
                   <Button disable="true" layoutX="355.0" layoutY="121.0" mnemonicParsing="false" onAction="#convertToHex" prefHeight="25.0" prefWidth="149.0" text="Convert Decimal to Hex" visible="false" />
-                  <Label fx:id="conditionLabel" layoutX="160.0" layoutY="168.0" />
-                  <Button layoutX="294.0" layoutY="121.0" mnemonicParsing="false" onAction="#convertValueToHex" prefHeight="25.0" prefWidth="100.0" text="Convert to Hex" />
-                  <TextField fx:id="floatValue" layoutX="167.0" layoutY="88.0" prefHeight="25.0" prefWidth="182.0" text="0.0" />
-                  <ChoiceBox fx:id="conversionType" layoutX="167.0" layoutY="121.0" prefHeight="25.0" prefWidth="120.0" />
-                  <Label layoutX="168.0" layoutY="72.0" text="Value to convert" />
+                  <Label fx:id="conditionLabel" layoutX="166.0" layoutY="164.0" prefHeight="25.0" prefWidth="344.0" textFill="#03a103">
+                     <font>
+                        <Font name="System Bold Italic" size="12.0" />
+                     </font></Label>
+                  <Button layoutX="416.0" layoutY="90.0" mnemonicParsing="false" onAction="#convertValueToHex" prefHeight="25.0" prefWidth="96.0" text="Convert to Hex" textFill="#868686">
+                     <font>
+                        <Font name="System Italic" size="12.0" />
+                     </font></Button>
+                  <TextField fx:id="floatValue" layoutX="164.0" layoutY="90.0" prefHeight="25.0" prefWidth="141.0" text="0.0">
+                     <font>
+                        <Font name="System Italic" size="12.0" />
+                     </font></TextField>
+                  <ChoiceBox fx:id="conversionType" layoutX="311.0" layoutY="90.0" prefHeight="25.0" prefWidth="101.0" />
+                  <Label layoutX="164.0" layoutY="73.0" text="Value to convert" textFill="#868686">
+                     <font>
+                        <Font name="System Italic" size="12.0" />
+                     </font></Label>
+                  <Label layoutX="166.0" layoutY="146.0" text="Search Expression : " textFill="#03a103">
+                     <font>
+                        <Font name="System Bold" size="12.0" />
+                     </font>
+                  </Label>
                </children>
             </AnchorPane>
          </content>

@@ -4,17 +4,24 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import me.mdbell.noexs.core.Debugger;
 import me.mdbell.noexs.core.MemoryInfo;
 import me.mdbell.util.HexUtils;
 
 public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
 
+    private static final Logger logger = LogManager.getLogger(DumpRegionSupplier.class);
+
     public abstract String getDescription();
 
     public abstract long getStart();
 
     public abstract long getEnd();
+
+    public abstract long getRealSize();
 
     public long getSize() {
         return getEnd() - getStart();
@@ -26,9 +33,13 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
 
     public static DumpRegionSupplier createSupplier(long start, long end, List<DumpRegion> regions, long size) {
         long nbRegions = regions.size();
+        long realSizeStep = 0;
         for (DumpRegion dr : regions) {
             dr.setTotal(nbRegions);
+            realSizeStep += dr.getSize();
         }
+
+        final long realSize = realSizeStep;
 
         return new DumpRegionSupplier() {
             int i = 0;
@@ -44,7 +55,13 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
             }
 
             @Override
+            public long getRealSize() {
+                return realSize;
+            }
+
+            @Override
             public long getSize() {
+                logger.debug("RealSize:{} vs Size:{}", realSize, size);
                 return size;
             }
 
@@ -84,6 +101,11 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
             @Override
             public String getDescription() {
                 return "Memory Info";
+            }
+
+            @Override
+            public long getRealSize() {
+                return size;
             }
 
             @Override
@@ -143,6 +165,11 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
                 return end;
             }
 
+            @Override
+            public long getRealSize() {
+                return getSize();
+            }
+
             MemoryInfo[] info;
             int i = 0;
 
@@ -162,12 +189,13 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
                         return null;
                     }
                     curr = info[i++];
-                } while (!curr.isReadable() || curr.getNextAddress() < start);
+                    // } while (!curr.isReadable() || curr.getNextAddress() < start);
+                } while (curr.getNextAddress() < start);
                 if (curr.getAddress() >= end) {
                     return null;
                 }
                 return new DumpRegion(Math.max(curr.getAddress(), start), Math.min(curr.getNextAddress(), end), i,
-                        info.length);
+                        info.length, curr);
             }
         };
     }
@@ -185,6 +213,11 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
             @Override
             public long getEnd() {
                 return zone2end;
+            }
+
+            @Override
+            public long getRealSize() {
+                return getSize();
             }
 
             @Override
