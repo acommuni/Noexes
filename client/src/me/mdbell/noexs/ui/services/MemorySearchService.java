@@ -460,11 +460,11 @@ public class MemorySearchService extends Service<SearchResult> {
                         }
 
                         updateProgress(read, totalSize);
-                        // logger.debug("Update progress read:{},total:{},size:{},diff:{}", read,
-                        // totalSize, size, totalSize - read);
-                        updateMessage(String.format("Dumping - DL: %s/s T: %s R: %s ETA: %s",
+                        long elapsed = System.currentTimeMillis() - startOfDump;
+                        updateMessage(String.format("Dumping - DL: %s/s T: %s R: %s ETA: %s ELAPSED: %s",
                                 NetUtils.formatSize((long) (trueAverage)), NetUtils.formatSize(totalSize),
-                                NetUtils.formatSize(remaining), TimeUtils.formatTime((long) (eta))));
+                                NetUtils.formatSize(remaining), TimeUtils.formatTime((long) (eta)),
+                                TimeUtils.formatTime(elapsed)));
 
                         continue;
                     }
@@ -496,16 +496,19 @@ public class MemorySearchService extends Service<SearchResult> {
                         }
 
                         updateProgress(read, totalSize);
-                        // logger.debug("Update progress read:{},total:{},size:{},diff:{}", read,
-                        // totalSize, size,
-                        // totalSize - read);
-                        updateMessage(String.format("Dumping - DL: %s/s T: %s R: %s ETA: %s",
+                        long elapsed = System.currentTimeMillis() - startOfDump;
+                        updateMessage(String.format("Dumping - DL: %s/s T: %s R: %s ETA: %s ELAPSED: %s",
                                 NetUtils.formatSize((long) (trueAverage)), NetUtils.formatSize(totalSize),
-                                NetUtils.formatSize(remaining), TimeUtils.formatTime((long) eta)));
+                                NetUtils.formatSize(remaining), TimeUtils.formatTime((long) eta),
+                                TimeUtils.formatTime(elapsed)));
 
                     }
                 }
             }
+
+            // Force 100% — read < totalSize à cause des trous entre régions (totalSize = plage continue)
+            updateProgress(totalSize, totalSize);
+            updateMessage("Dump finished");
 
             long stopOfDump = System.currentTimeMillis();
 
@@ -513,7 +516,7 @@ public class MemorySearchService extends Service<SearchResult> {
 
             float trougput = 0.0f;
             if (duration > 0) {
-                trougput = (realRead / duration) / (1024 * 1024);
+                trougput = (float) realRead / (duration * 1024.0f * 1024.0f); // cast float AVANT division
             }
 
             logger.debug("Dump finished (Real Read:{}, Unread:{}, Duration : {} s, Troughtput : {} Mb/s, Resume : {} )",

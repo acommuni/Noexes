@@ -2,6 +2,8 @@ package me.mdbell.noexs.ui.controllers;
 
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
@@ -16,6 +18,8 @@ import java.nio.ByteOrder;
 import java.util.List;
 
 public class DisassemblerController implements IController {
+
+    private static final Logger logger = LogManager.getLogger(DisassemblerController.class);
 
     @FXML
     AddressSpinner visibleAddress;
@@ -105,7 +109,7 @@ public class DisassemblerController implements IController {
                 return;
             }
             Result r = mc.getDebugger().writemem(b, addr);
-            System.out.println(r);
+            logger.debug("writemem result: {}", r);
             if (r.succeeded()) {
                 updateView();
             } else {

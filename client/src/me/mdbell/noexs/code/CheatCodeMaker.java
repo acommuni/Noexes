@@ -3,6 +3,8 @@ package me.mdbell.noexs.code;
 import java.util.List;
 
 import org.antlr.v4.runtime.CharStreams;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.antlr.v4.runtime.CodePointCharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 
@@ -28,6 +30,8 @@ import me.mdbell.noexs.code.parser.CodeParser;
 import me.mdbell.noexs.code.parser.CodeParser.CodesContext;
 
 public class CheatCodeMaker {
+
+    private static final Logger logger = LogManager.getLogger(CheatCodeMaker.class);
 
     private static String DEFAULT_REGISTER_TO_USE = "F";
 
@@ -91,7 +95,7 @@ public class CheatCodeMaker {
                 res.addLineToEnd(OpCode8BeginKeypressConditionalBlock
                         .beginKeypressConditionalBlock(((ConditionPressButton) instruction).getKeypad()));
             } else {
-                System.err.println("Unkonwn instruction : " + instruction);
+                logger.warn("Unknown instruction : {}", instruction);
 
             }
 

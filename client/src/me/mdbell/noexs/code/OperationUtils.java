@@ -1,10 +1,14 @@
 package me.mdbell.noexs.code;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import me.mdbell.noexs.code.opcode.model.EDataType;
 
 public class OperationUtils {
+
+    private static final Logger logger = LogManager.getLogger(OperationUtils.class);
 
     public static String padHexValue(String hexValue, EDataType dataType) {
         return padHexValue(hexValue, dataType, null);
@@ -23,7 +27,7 @@ public class OperationUtils {
         String cappedValue = StringUtils.substring(hexValue, startPos, startPos + valueMaxSize);
 
         if (!StringUtils.equals(hexValue, cappedValue)) {
-            System.err.println("Truncated value : " + hexValue + " to " + cappedValue);
+            logger.warn("Truncated value : {} to {}", hexValue, cappedValue);
         }
 
         // TODO : manage error
