@@ -48,6 +48,7 @@ public class DebuggerConnectionService extends ScheduledService<IConnection> {
                         InetSocketAddress addr = new InetSocketAddress(host, port);
                         s.connect(addr, timeout);
                         s.setTcpNoDelay(true);
+                        s.setSoTimeout(15_000); // 15s max par read — détecte un serveur bloqué
                         return new SocketConnection(s);
                     }
                 };

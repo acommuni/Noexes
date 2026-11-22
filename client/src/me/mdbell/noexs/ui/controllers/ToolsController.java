@@ -29,6 +29,7 @@ import me.mdbell.noexs.core.MemoryType;
 import me.mdbell.noexs.core.Result;
 import me.mdbell.noexs.misc.ExpressionEvaluator;
 import me.mdbell.noexs.ui.menus.MemoryInfoContextMenu;
+import me.mdbell.noexs.ui.models.DataType;
 import me.mdbell.noexs.ui.models.EAccessType;
 import me.mdbell.noexs.ui.models.MemoryInfoTableModel;
 import me.mdbell.noexs.ui.models.MemoryInfoUtils;
@@ -84,7 +85,7 @@ public class ToolsController implements IController {
         if (!debugger.connected()) {
             return 0;
         }
-        return debugger.peek64(addr);
+        return debugger.peek(DataType.LONG, addr);
     });
 
     @FXML

@@ -82,7 +82,7 @@ public interface IConnection extends Closeable {
         int tmp = len;
         while (tmp > 0) {
             int i = read(b, off, tmp);
-            if (i == -1) {
+            if (i <= 0) { // -1 = EOF, 0 = rien lu → évite une boucle infinie
                 break;
             }
             off += i;

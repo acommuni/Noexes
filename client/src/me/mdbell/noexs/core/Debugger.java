@@ -6,22 +6,21 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import me.mdbell.noexs.core.debugger.EDebCommand;
+import me.mdbell.noexs.core.debugger.EMemoryAccess;
 import me.mdbell.noexs.core.debugger.RDebAttachInput;
 import me.mdbell.noexs.core.debugger.RDebCurrentPidOutput;
 import me.mdbell.noexs.core.debugger.RDebGetAttachedPidOutput;
 import me.mdbell.noexs.core.debugger.RDebGetPidsOutput;
 import me.mdbell.noexs.core.debugger.RDebGetTitleIdInput;
 import me.mdbell.noexs.core.debugger.RDebGetTitleIdOutput;
-import me.mdbell.noexs.core.debugger.RDebPoke16Input;
-import me.mdbell.noexs.core.debugger.RDebPoke32Input;
-import me.mdbell.noexs.core.debugger.RDebPoke64Input;
-import me.mdbell.noexs.core.debugger.RDebPoke8Input;
 import me.mdbell.noexs.core.debugger.RDebSetBreakpointInput;
 import me.mdbell.noexs.core.debugger.RDebStatusOutput;
 import me.mdbell.noexs.core.utils.AutoReleaseSemaphore;
@@ -36,7 +35,14 @@ public class Debugger implements Commands, Closeable {
 
     private static final Logger logger = LogManager.getLogger(Debugger.class);
     private IConnection conn;
-    private MemoryInfo prev;
+    /** Cache LRU des MemoryInfo (64 entrées max), indexé par adresse de début. */
+    private final LinkedHashMap<Long, MemoryInfo> memInfoCache =
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<Long, MemoryInfo> eldest) {
+                    return size() > 64;
+                }
+            };
     private Semaphore semaphore = new Semaphore(1);
     private AutoReleaseSemaphore<ConnectionException> autoReleaseSemaphore = new AutoReleaseSemaphore(semaphore,
             ConnectionException.class);
@@ -78,88 +84,29 @@ public class Debugger implements Commands, Closeable {
     }
 
     public void poke(DataType type, long addr, long value) {
-        switch (type) {
-            case BYTE:
-                poke8(addr, (int) value);
-                break;
-            case SHORT:
-                poke16(addr, (int) value);
-                break;
-            case INT:
-                poke32(addr, (int) value);
-                break;
-            case LONG:
-                poke64(addr, value);
-                break;
-        }
+        EMemoryAccess ma = EMemoryAccess.from(type);
+        poke(ma.pokeCommand(), ma.newPokeInput(addr, value));
     }
 
-    public void poke8(long addr, int value) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+    // --- Poke (factorisé) ---
 
-            DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE8, new RDebPoke8Input(addr, (byte) value));
+    private void poke(EDebCommand cmd, Object input) {
+        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+            DebuggerUtils.runCommand(conn, cmd, input);
             Result rc = conn.readResult();
-            logger.debug("COMMAND Result : rc={}", rc);
+            logger.debug("COMMAND {} Result : rc={}", cmd, rc);
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
         }
     }
+
+    // --- Peek (factorisé, buffer 8 bytes identique à l'original) ---
 
     private byte[] peekBuffer = new byte[8];
 
-    public int peek8(long addr) {
-        ByteBuffer b = readmem(addr, 1, peekBuffer).order(ByteOrder.LITTLE_ENDIAN);
-        return b.get() & 0xFF;
-    }
-
-    public void poke16(long addr, int value) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
-            DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE16, new RDebPoke16Input(addr, (short) value));
-            Result rc = conn.readResult();
-            logger.debug("COMMAND Result : rc={}", rc);
-            if (rc.failed()) {
-                throw new ConnectionException(rc);
-            }
-        }
-    }
-
-    public int peek16(long addr) {
-        ByteBuffer b = readmem(addr, 2, peekBuffer).order(ByteOrder.LITTLE_ENDIAN);
-        return b.getShort() & 0xFFFF;
-
-    }
-
-    public void poke32(long addr, int value) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
-            DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE32, new RDebPoke32Input(addr, (int) value));
-            Result rc = conn.readResult();
-            logger.debug("COMMAND Result : rc={}", rc);
-            if (rc.failed()) {
-                throw new ConnectionException(rc);
-            }
-        }
-    }
-
-    public int peek32(long addr) {
-        ByteBuffer b = readmem(addr, 4, peekBuffer).order(ByteOrder.LITTLE_ENDIAN);
-        return b.getInt();
-    }
-
-    public void poke64(long addr, long value) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
-            DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_POKE64, new RDebPoke64Input(addr, (long) value));
-            Result rc = conn.readResult();
-            logger.debug("COMMAND Result : rc={}", rc);
-            if (rc.failed()) {
-                throw new ConnectionException(rc);
-            }
-        }
-    }
-
-    public long peek64(long addr) {
-        ByteBuffer b = readmem(addr, 8, peekBuffer).order(ByteOrder.LITTLE_ENDIAN);
-        return b.getLong();
+    private ByteBuffer peekN(int size, long addr) {
+        return readmem(addr, size, peekBuffer).order(ByteOrder.LITTLE_ENDIAN);
     }
 
     public Result setWatchpoint(boolean read, boolean write, long addr) {
@@ -326,17 +273,20 @@ public class Debugger implements Commands, Closeable {
     public MemoryInfo query(long address) {
         logger.debug("COMMAND : Query Memory  address:{}", HexUtils.formatAddress(address));
         try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
-            if (prev != null && prev.getAddress() != 0 && address >= prev.getAddress()
-                    && address < prev.getNextAddress()) {
-                return prev;
+            // Cherche dans le cache LRU : toute région connue contenant l'adresse
+            for (MemoryInfo info : memInfoCache.values()) {
+                if (info.contains(address)) {
+                    return info;
+                }
             }
 
             conn.writeCommand(COMMAND_QUERY_MEMORY);
             conn.writeLong(address);
             conn.flush();
-            prev = readInfo();
-            logger.debug("COMMAND Result :{} ", prev);
-            return prev;
+            MemoryInfo info = readInfo();
+            memInfoCache.put(info.getAddress(), info);
+            logger.debug("COMMAND Result :{} ", info);
+            return info;
         }
     }
 
@@ -353,6 +303,7 @@ public class Debugger implements Commands, Closeable {
             for (count = 0; count < max; count++) {
                 MemoryInfo info = readInfo();
                 res[count] = info;
+                memInfoCache.put(info.getAddress(), info); // pré-remplit le cache LRU
                 if (info.getType() == MemoryType.RESERVED) {
                     break;
                 }
@@ -471,31 +422,35 @@ public class Debugger implements Commands, Closeable {
 
     private byte[] compressedBuffer = new byte[2048 * 4 * 6];
 
+    private static final int MAX_CHUNK_SIZE = 0x10000; // 64KB — marge de sécurité (serveur max = 8KB)
+
     private int readCompressed(byte[] buffer) {
         int compressedFlag = conn.readByte();
         int decompressedLen = conn.readInt();
+
+        // Détection de désynchronisation du protocole
+        if (compressedFlag != 0 && compressedFlag != 1) {
+            throw new ConnectionException("Protocol desync: invalid compressedFlag=" + compressedFlag);
+        }
+        if (decompressedLen < 0 || decompressedLen > MAX_CHUNK_SIZE) {
+            throw new ConnectionException("Protocol desync: decompressedLen=0x"
+                    + Integer.toHexString(decompressedLen));
+        }
 
         if (compressedFlag == 0) {
             conn.readFully(buffer, 0, decompressedLen);
         } else {
             int compressedLen = conn.readInt();
+            if (compressedLen < 0 || compressedLen > MAX_CHUNK_SIZE) {
+                throw new ConnectionException("Protocol desync: compressedLen=0x"
+                        + Integer.toHexString(compressedLen));
+            }
             conn.readFully(compressedBuffer, 0, compressedLen);
             int pos = 0;
             for (int i = 0; i < compressedLen; i += 2) {
                 byte value = compressedBuffer[i];
                 int count = compressedBuffer[i + 1] & 0xFF;
-
-                // Arrays.fill(buffer, pos, pos + count, value);
-
-                byte[] a = buffer;
-                int fromIndex = pos;
-                int toIndex = pos + count;
-                byte val = value;
-
-                for (int fi = fromIndex; fi < toIndex; fi++) {
-                    a[fi] = val;
-                }
-
+                Arrays.fill(buffer, pos, pos + count, value);
                 pos += count;
             }
         }
@@ -535,16 +490,8 @@ public class Debugger implements Commands, Closeable {
     }
 
     public long peek(DataType type, long addr) {
-        switch (type) {
-            case BYTE:
-                return peek8(addr) & 0xffL;
-            case SHORT:
-                return peek16(addr) & 0xffffL;
-            case INT:
-                return peek32(addr) & 0xffffffffL;
-            case LONG:
-                return peek64(addr);
-        }
-        throw new IllegalArgumentException("Illegal data type:" + type);
+        EMemoryAccess ma = EMemoryAccess.from(type);
+        ByteBuffer buf = peekN(ma.size(), addr);
+        return ma.extractPeek(buf);
     }
 }
