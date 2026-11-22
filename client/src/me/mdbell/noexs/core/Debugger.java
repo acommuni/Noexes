@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -34,7 +35,7 @@ import me.mdbell.util.HexUtils;
 public class Debugger implements Commands, Closeable {
 
     private static final Logger logger = LogManager.getLogger(Debugger.class);
-    private IConnection conn;
+    private final IConnection conn;
     /** Cache LRU des MemoryInfo (64 entrées max), indexé par adresse de début. */
     private final LinkedHashMap<Long, MemoryInfo> memInfoCache =
             new LinkedHashMap<>(64, 0.75f, true) {
@@ -59,8 +60,21 @@ public class Debugger implements Commands, Closeable {
         return conn;
     }
 
+    /** Exécute une action sous le sémaphore de connexion (libéré automatiquement). */
+    private <T> T withLock(Supplier<T> action) {
+        try (var sem = autoReleaseSemaphore.acquire()) {
+            return action.get();
+        }
+    }
+
+    private void withLock(Runnable action) {
+        try (var sem = autoReleaseSemaphore.acquire()) {
+            action.run();
+        }
+    }
+
     public DebuggerStatus getStatus() {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             RDebStatusOutput statusOutput = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_STATUS);
 
             int status = statusOutput.status();
@@ -77,10 +91,9 @@ public class Debugger implements Commands, Closeable {
             if (protocolVersion > CURRENT_PROTOCOL_VERSION) {
                 throw new ConnectionException(String.format("Unsupported protocol version:%08X", protocolVersion));
             }
-            protocolVersion |= patch; // we don't need to check the patch value, as it should always be backwards
-                                      // compatible.
+            protocolVersion |= patch;
             return DebuggerStatus.forId(status);
-        }
+        });
     }
 
     public void poke(DataType type, long addr, long value) {
@@ -91,14 +104,14 @@ public class Debugger implements Commands, Closeable {
     // --- Poke (factorisé) ---
 
     private void poke(EDebCommand cmd, Object input) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        withLock(() -> {
             DebuggerUtils.runCommand(conn, cmd, input);
             Result rc = conn.readResult();
             logger.debug("COMMAND {} Result : rc={}", cmd, rc);
             if (rc.failed()) {
                 throw new ConnectionException(rc);
             }
-        }
+        });
     }
 
     // --- Peek (factorisé, buffer 8 bytes identique à l'original) ---
@@ -110,9 +123,7 @@ public class Debugger implements Commands, Closeable {
     }
 
     public Result setWatchpoint(boolean read, boolean write, long addr) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
-            Result rc;
-
+        return withLock(() -> {
             WatchpointFlagBuilder.MatchType t;
             if (read & write) {
                 t = WatchpointFlagBuilder.MatchType.ALL;
@@ -123,7 +134,6 @@ public class Debugger implements Commands, Closeable {
             } else {
                 throw new IllegalArgumentException("No flags set for watchpoint");
             }
-            System.out.println(t);
             int size = 4;
             int id = 0;
             int bpId = id + 4;
@@ -134,23 +144,21 @@ public class Debugger implements Commands, Closeable {
                     .setBreakpointType(BreakpointType.LINKED_CONTEXT_IDR_MATCH);
             WatchpointFlagBuilder wp = new WatchpointFlagBuilder().setEnabled(true).setAccessContol(t)
                     .setAddressSelect(mask).setLinkedBreakpointNumber(bpId);
-            rc = setBreakpoint(bpId, bp.getFlag(), 0);
-            System.out.println("bp:" + rc);
+            Result rc = setBreakpoint(bpId, bp.getFlag(), 0);
             if (rc.succeeded()) {
-                rc = setBreakpoint(0x10 + id, wp.getFlag(), addr); // wp
-                System.out.println("wp:" + rc);
+                rc = setBreakpoint(0x10 + id, wp.getFlag(), addr);
             }
             logger.debug("COMMAND Result : rc={}", rc);
             return rc;
-        }
+        });
     }
 
     public Result setBreakpoint(int id, long flags, long addr) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_SET_BREAKPOINT,
                     new RDebSetBreakpointInput(id, addr, flags));
             return conn.readResult();
-        }
+        });
     }
 
     public Result writemem(byte[] data, long addr) {
@@ -158,7 +166,7 @@ public class Debugger implements Commands, Closeable {
     }
 
     public Result writemem(byte[] data, int off, int len, long addr) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             conn.writeCommand(COMMAND_WRITE);
             conn.writeLong(addr);
             conn.writeInt(len);
@@ -173,7 +181,7 @@ public class Debugger implements Commands, Closeable {
                 return r;
             }
             return conn.readResult();
-        }
+        });
     }
 
     public void readmem(MemoryInfo info, OutputStream to) throws IOException {
@@ -215,7 +223,8 @@ public class Debugger implements Commands, Closeable {
     }
 
     public ByteBuffer readmem(long addr, int size, byte[] bytes) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        final byte[] target = (bytes == null) ? new byte[size] : bytes;
+        return withLock(() -> {
             conn.writeCommand(COMMAND_READ);
             conn.writeLong(addr);
             conn.writeInt(size);
@@ -223,14 +232,8 @@ public class Debugger implements Commands, Closeable {
             Result rc = conn.readResult();
             if (rc.failed()) {
                 logger.debug("COMMAND Result : rc={}", rc);
-            }
-            if (rc.failed()) {
                 conn.readResult(); // ignored
                 throw new ConnectionException(rc);
-            }
-
-            if (bytes == null) {
-                bytes = new byte[size];
             }
 
             int pos = 0;
@@ -242,12 +245,12 @@ public class Debugger implements Commands, Closeable {
                     throw new ConnectionException(rc);
                 }
                 int len = readCompressed(buffer);
-                System.arraycopy(buffer, 0, bytes, pos, len);
+                System.arraycopy(buffer, 0, target, pos, len);
                 pos += len;
             }
             conn.readResult(); // ignored
-            return ByteBuffer.wrap(bytes);
-        }
+            return ByteBuffer.wrap(target);
+        });
     }
 
     public Result resume() {
@@ -260,10 +263,10 @@ public class Debugger implements Commands, Closeable {
 
     public Result attach(long pid) {
         logger.debug("COMMAND : Attach to pid :{}", pid);
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_ATTACH, new RDebAttachInput(pid));
             return conn.readResult();
-        }
+        });
     }
 
     public Result detach() {
@@ -272,7 +275,7 @@ public class Debugger implements Commands, Closeable {
 
     public MemoryInfo query(long address) {
         logger.debug("COMMAND : Query Memory  address:{}", HexUtils.formatAddress(address));
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             // Cherche dans le cache LRU : toute région connue contenant l'adresse
             for (MemoryInfo info : memInfoCache.values()) {
                 if (info.contains(address)) {
@@ -287,12 +290,12 @@ public class Debugger implements Commands, Closeable {
             memInfoCache.put(info.getAddress(), info);
             logger.debug("COMMAND Result :{} ", info);
             return info;
-        }
+        });
     }
 
     public MemoryInfo[] query(long start, int max) {
         logger.debug("COMMAND : Query Memory Multi start:{}, max:{}", start, max);
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             conn.writeCommand(COMMAND_QUERY_MEMORY_MULTI);
             conn.writeLong(start);
             conn.writeInt(max);
@@ -311,11 +314,11 @@ public class Debugger implements Commands, Closeable {
             conn.readResult(); // ignored here, it gets checked in readInfo()
             logger.debug("COMMAND query : read {} memory info", count);
             return Arrays.copyOf(res, count);
-        }
+        });
     }
 
     public long getCurrentPid() {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             RDebCurrentPidOutput currentPid = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_CURRENT_PID);
             long pid = currentPid.pid();
             Result rc = conn.readResult();
@@ -325,11 +328,11 @@ public class Debugger implements Commands, Closeable {
             }
             logger.debug("COMMAND Result : pid={}", pid);
             return pid;
-        }
+        });
     }
 
     public long getAttachedPid() {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             RDebGetAttachedPidOutput attachedPid = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_GET_ATTACHED_PID);
             long pid = attachedPid.pid();
             Result rc = conn.readResult();
@@ -338,12 +341,11 @@ public class Debugger implements Commands, Closeable {
                 throw new ConnectionException("This is impossible, so you've done something terribly wrong", rc);
             }
             return pid;
-        }
+        });
     }
 
     public long[] getPids() {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
-
+        return withLock(() -> {
             RDebGetPidsOutput getPids = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_GET_PIDS);
             long[] pids = getPids.pids();
             Result rc = conn.readResult();
@@ -352,22 +354,19 @@ public class Debugger implements Commands, Closeable {
                 throw new ConnectionException(rc);
             }
             return pids;
-        }
+        });
     }
 
     public long getTitleId(long pid) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             RDebGetTitleIdOutput res = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_GET_TITLEID,
                     new RDebGetTitleIdInput(pid));
             long tid = res.tid();
             Result rc = conn.readResult();
             logger.debug("COMMAND Result : rc={}", rc);
-            if (rc.failed()) {
-                // TODO throw? idk
-
-            }
+            // TODO throw on failure?
             return tid;
-        }
+        });
     }
 
     private void disconnect() {
@@ -375,24 +374,22 @@ public class Debugger implements Commands, Closeable {
     }
 
     public void getBookmark() {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        withLock(() -> {
             conn.writeCommand(COMMAND_GET_BOOKMARK);
             conn.flush();
             int count = conn.readInt();
-            System.out.println("Bookmark count : " + count);
+            logger.debug("Bookmark count : {}", count);
             conn.writeCommand(COMMAND_STATUS);
             conn.flush();
             int count2 = conn.readInt();
-            System.out.println("Bookmark count2 : " + count2);
+            logger.debug("Bookmark count2 : {}", count2);
 
             Result rc = conn.readResult();
-
             if (rc.failed()) {
                 conn.readResult(); // ignored
                 throw new ConnectionException(rc);
             }
-
-        }
+        });
     }
 
     public long getCurrentTitleId() {
@@ -470,18 +467,17 @@ public class Debugger implements Commands, Closeable {
     }
 
     private Result getResult(EDebCommand cmd) {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        return withLock(() -> {
             DebuggerUtils.runCommand(conn, cmd);
             return conn.readResult();
-        }
+        });
     }
 
     private Result getResult(EDebCommand cmd, String failureReason) {
-        Result res = null;
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
+        Result res = withLock(() -> {
             DebuggerUtils.runCommand(conn, cmd);
-            res = conn.readResult();
-        }
+            return conn.readResult();
+        });
         if (res.failed()) {
             throw new ConnectionException(failureReason, res);
         }
