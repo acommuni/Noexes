@@ -20,8 +20,18 @@ public enum EDebCommand {
     COMMAND_GET_PIDS(0x10, null, RDebGetPidsOutput.class),
     COMMAND_GET_TITLEID(0x11, RDebGetTitleIdInput.class, RDebGetTitleIdOutput.class),
     COMMAND_DISCONNECT(0x12),
-    // int COMMAND_READ_MULTI = 0x13;
-    COMMAND_SET_BREAKPOINT(0x14, RDebSetBreakpointInput.class, null);
+    COMMAND_READ_MULTI(0x13),          // protocole manuel (liste d'adresses)
+    COMMAND_SET_BREAKPOINT(0x14, RDebSetBreakpointInput.class, null),
+    COMMAND_FREEZE_ADDRESS(0x15, RDebFreezeAddressInput.class, RDebFreezeAddressOutput.class),
+    COMMAND_SEARCH_LOCAL(0x16, RDebSearchLocalInput.class, null), // output = flux LZ manuel
+    COMMAND_FETCH_RESULT(0x17),        // protocole manuel
+    COMMAND_DETACH_DMNT(0x18),
+    COMMAND_DUMP_PTR(0x19, null, RDebDumpPtrOutput.class), // puis flux LZ de paires (from,to)
+    COMMAND_ATTACH_DMNT(0x1A),
+    COMMAND_GET_BOOKMARK(0x1B),        // protocole manuel (flux LZ)
+    COMMAND_PUT_BOOKMARK(0x1C),        // protocole manuel (envoi fichier)
+    COMMAND_DMNT_RESUME(0x1D),
+    COMMAND_RESOLVE_POINTERS(0x1E);    // input/output manuels (batch de chemins)
 
     private int code;
 

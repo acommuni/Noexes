@@ -19,6 +19,9 @@ import org.apache.logging.log4j.Logger;
 import me.mdbell.noexs.core.debugger.EDebCommand;
 import me.mdbell.noexs.core.debugger.EMemoryAccess;
 import me.mdbell.noexs.core.debugger.RDebAttachInput;
+import me.mdbell.noexs.core.debugger.RDebFreezeAddressInput;
+import me.mdbell.noexs.core.debugger.RDebFreezeAddressOutput;
+import me.mdbell.noexs.core.debugger.RDebResolvePointerOutput;
 import me.mdbell.noexs.core.debugger.RDebCurrentPidOutput;
 import me.mdbell.noexs.core.debugger.RDebGetAttachedPidOutput;
 import me.mdbell.noexs.core.debugger.RDebGetPidsOutput;
@@ -451,6 +454,184 @@ public class Debugger implements Commands, Closeable {
         for (int i = 0; i < 8; i++) {
             b[off + i] = (byte) (v >>> (8 * i));
         }
+    }
+
+    // ==================== Nouvelles commandes 0x13-0x1E ====================
+
+    /** Résultat d'un dump ptr (0x19) : bornes mémoire + paires (from,to) de pointeurs. */
+    public record DumpPtrResult(long mainStart, long mainEnd, long heapStart, long heapEnd,
+                                List<long[]> pointers) {
+        /** Chaque entrée pointers[i] = {fromAddress, toAddress}. */
+    }
+
+    /**
+     * Lit un flux de chunks LZ compressés (protocole commun à 0x16, 0x17, 0x19, 0x1B).
+     * Boucle : envoie cont=1, lit count, lit count bytes, décompresse, jusqu'à count=0.
+     * Le consumer reçoit chaque chunk décompressé.
+     */
+    private void readLzStream(java.util.function.IntConsumer chunkSizeConsumer,
+                              ThrowingConsumer<ByteBuffer> dataConsumer) {
+        byte[] compressed = new byte[2048 * 32 * 2]; // 128KB max
+        byte[] decompressed = new byte[2048 * 32];    // 64KB
+        while (true) {
+            conn.writeByte(1); // cont = 1
+            conn.flush();
+            int count = conn.readInt();
+            if (count == 0) break;
+            if (count < 0 || count > compressed.length) {
+                throw new ConnectionException("Protocol desync: LZ count=0x" + Integer.toHexString(count));
+            }
+            conn.readFully(compressed, 0, count);
+            int len = lzUncompress(compressed, count, decompressed);
+            if (chunkSizeConsumer != null) chunkSizeConsumer.accept(len);
+            if (dataConsumer != null) {
+                dataConsumer.accept(ByteBuffer.wrap(decompressed, 0, len).order(ByteOrder.LITTLE_ENDIAN));
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingConsumer<T> {
+        void accept(T t) throws Exception;
+    }
+
+    /**
+     * 0x13 — Lecture batch de plusieurs zones en un seul round-trip.
+     * Retourne toutes les données concaténées dans un seul buffer avec les offsets de chaque zone.
+     */
+    public MultiReadResult readmemMulti(List<ZoneToDump> zones) {
+        return withLock(() -> {
+            int totalSize = zones.stream().mapToInt(ZoneToDump::dataSize).sum();
+            byte[] all = new byte[totalSize];
+
+            conn.writeCommand(COMMAND_READ_MULTI);
+            conn.writeInt(zones.size());
+            conn.writeInt(zones.isEmpty() ? 0 : zones.get(0).dataSize()); // data_size uniforme (protocole)
+            for (ZoneToDump z : zones) conn.writeLong(z.address());
+            conn.flush();
+
+            Result rc = conn.readResult();
+            if (rc.failed()) throw new ConnectionException(rc);
+
+            List<MultiReadResult.ZoneRead> zoneReads = new ArrayList<>();
+            int offset = 0;
+            for (ZoneToDump z : zones) {
+                rc = conn.readResult();
+                if (rc.failed()) throw new ConnectionException(rc);
+                conn.readFully(all, offset, z.dataSize());
+                zoneReads.add(new MultiReadResult.ZoneRead(z.address(), offset, z.dataSize(),
+                        ByteBuffer.wrap(all, offset, z.dataSize()).order(ByteOrder.LITTLE_ENDIAN).slice()));
+                offset += z.dataSize();
+            }
+            conn.readResult(); // trailing
+            return new MultiReadResult(zoneReads, totalSize, all);
+        });
+    }
+
+    /** 0x15 — Freeze une adresse en mémoire (via DMNT). Retourne la valeur freezée. */
+    public long freezeAddress(long addr, long width) {
+        RDebFreezeAddressOutput out = withLock(() -> {
+            RDebFreezeAddressOutput o = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_FREEZE_ADDRESS,
+                    new RDebFreezeAddressInput(addr, width));
+            Result rc = conn.readResult();
+            if (rc.failed()) throw new ConnectionException(rc);
+            return o;
+        });
+        return out.value();
+    }
+
+    /**
+     * 0x19 — Dump des pointeurs (main + heap). Retourne les bornes et toutes les paires
+     * (from, to) trouvées. Le flux de paires est lu en LZ comme getBookmark.
+     */
+    public DumpPtrResult dumpPtr() {
+        return withLock(() -> {
+            conn.writeCommand(COMMAND_DUMP_PTR);
+            conn.flush();
+
+            // 32 bytes de bornes : mainStart, mainEnd, heapStart, heapEnd (8B LE chacune)
+            long mainStart = conn.readLong();
+            long mainEnd = conn.readLong();
+            long heapStart = conn.readLong();
+            long heapEnd = conn.readLong();
+
+            List<long[]> pointers = new ArrayList<>();
+            readLzStream(null, bb -> {
+                while (bb.remaining() >= 16) {
+                    long from = bb.getLong();
+                    long to = bb.getLong();
+                    pointers.add(new long[]{from, to});
+                }
+            });
+
+            Result rc = conn.readResult();
+            if (rc.failed()) throw new ConnectionException(rc);
+            logger.debug("DumpPtr: main=[{},{}], heap=[{},{}], {} pointers",
+                    Long.toHexString(mainStart), Long.toHexString(mainEnd),
+                    Long.toHexString(heapStart), Long.toHexString(heapEnd), pointers.size());
+            return new DumpPtrResult(mainStart, mainEnd, heapStart, heapEnd, pointers);
+        });
+    }
+
+    /**
+     * 0x1E — Résout un batch de chemins de pointeurs.
+     * Chaque chemin = {depth (s16, >0=main, <0=heap), offsets...}.
+     * Retourne pour chaque chemin : {idx, depthAtteint, address, value}.
+     */
+    public List<RDebResolvePointerOutput> resolvePointers(short[][] paths) {
+        return withLock(() -> {
+            conn.writeCommand(COMMAND_RESOLVE_POINTERS);
+            conn.writeInt(paths.length);
+            for (short[] path : paths) {
+                conn.writeShort(path[0]); // depth (s16)
+                for (int i = 1; i < path.length; i++) {
+                    conn.writeInt(path[i] & 0xFFFF); // offset u32 (écrit comme int LE)
+                }
+            }
+            conn.flush();
+
+            List<RDebResolvePointerOutput> results = new ArrayList<>();
+            for (int i = 0; i < paths.length; i++) {
+                int idx = conn.readInt();
+                short depth = conn.readShort();
+                long address = conn.readLong();
+                long value = conn.readLong();
+                results.add(new RDebResolvePointerOutput(idx, depth, address, value));
+            }
+            Result rc = conn.readResult();
+            if (rc.failed()) throw new ConnectionException(rc);
+            return results;
+        });
+    }
+
+    /** 0x1C — Envoie un fichier bookmark vers la Switch (EdiZon DirectTransfer.bmk). */
+    public void putBookmark(byte[] data) {
+        withLock(() -> {
+            conn.writeCommand(COMMAND_PUT_BOOKMARK);
+            conn.flush();
+            Result ack = conn.readResult();
+            if (ack.failed()) throw new ConnectionException(ack);
+            conn.writeInt(data.length);
+            conn.write(data, 0, data.length);
+            conn.flush();
+            Result rc = conn.readResult();
+            if (rc.failed()) throw new ConnectionException(rc);
+        });
+    }
+
+    /** 0x18 — Detach du process DMNT. */
+    public Result detachDmnt() {
+        return getResult(EDebCommand.COMMAND_DETACH_DMNT);
+    }
+
+    /** 0x1A — Attach forcé au process DMNT. */
+    public Result attachDmnt() {
+        return getResult(EDebCommand.COMMAND_ATTACH_DMNT);
+    }
+
+    /** 0x1D — Resume du process DMNT. */
+    public Result dmntResume() {
+        return getResult(EDebCommand.COMMAND_DMNT_RESUME);
     }
 
     public long getCurrentTitleId() {
