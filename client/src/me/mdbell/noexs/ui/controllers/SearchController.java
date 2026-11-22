@@ -156,10 +156,11 @@ public class SearchController implements IController {
             convertValueToHex(event);
         });
 
-        // Tout changement de texte (clavier, coller, programmatique) → bouton rouge gras
+        // Tout changement de texte → bouton + valeur hex en rouge (conversion en attente)
         floatValue.textProperty().addListener((obs, oldText, newText) -> {
             if (!newText.equals(oldText)) {
-                convertToHexBtn.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                convertToHexBtn.setStyle("-fx-text-fill: red;");
+                knownValue.getEditor().setStyle("-fx-text-fill: red;");
             }
         });
 
@@ -347,14 +348,10 @@ public class SearchController implements IController {
         }
     }
 
-    /** Valeur modifiée → bouton en rouge gras (indique une conversion en attente). */
-    public void onFloatValueChanged(KeyEvent event) {
-        convertToHexBtn.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
-    }
-
     public void convertValueToHex(ActionEvent event) {
-        // Reset style : retour au gris fin après conversion
-        convertToHexBtn.setStyle("-fx-text-fill: #868686; -fx-font-weight: normal;");
+        // Reset styles : bouton gris, valeur hex noire après conversion
+        convertToHexBtn.setStyle("-fx-text-fill: #868686;");
+        knownValue.getEditor().setStyle("-fx-text-fill: black;");
         try {
             switch (conversionType.getValue()) {
                 case FLT:

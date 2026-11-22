@@ -5,8 +5,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.function.Supplier;
@@ -191,66 +193,61 @@ public class Debugger implements Commands, Closeable {
         readmem(info.getAddress(), (int) info.getSize(), to);
     }
 
-    public void readmem(long start, int size, OutputStream to) throws IOException {
-        try (AutoReleaseSemaphore<ConnectionException> sem = autoReleaseSemaphore.acquire()) {
-            conn.writeCommand(COMMAND_READ);
-            conn.writeLong(start);
-            conn.writeInt(size);
-            conn.flush();
-
-            Result rc = conn.readResult();
-            if (rc.failed()) {
-                logger.debug("COMMAND Result : rc={}", rc);
-            }
-            if (rc.succeeded()) {
-                // try (BufferedOutputStream bufferedWriter = new BufferedOutputStream(to)) {
-                byte[] buffer = new byte[2048 * 4];
-                while (size > 0) {
-                    rc = conn.readResult();
-                    if (rc.failed()) {
-                        conn.readResult();
-                        throw new ConnectionException(rc);
-                    }
-                    int len = readCompressed(buffer);
-                    // to.write(buffer, 0, len);
-                    to.write(buffer, 0, len);
-                    size -= len;
-                }
-                // }
-            }
-            conn.readResult();
-        }
+    /** Sink de réception des chunks lus — permet de factoriser le protocole READ. */
+    @FunctionalInterface
+    private interface ChunkConsumer {
+        void accept(byte[] data, int off, int len) throws IOException;
     }
 
-    public ByteBuffer readmem(long addr, int size, byte[] bytes) {
-        final byte[] target = (bytes == null) ? new byte[size] : bytes;
-        return withLock(() -> {
+    /** Cœur unique du protocole COMMAND_READ (0x06). */
+    private void readmemInternal(long addr, int size, ChunkConsumer consumer) throws IOException {
+        try (var sem = autoReleaseSemaphore.acquire()) {
             conn.writeCommand(COMMAND_READ);
             conn.writeLong(addr);
             conn.writeInt(size);
             conn.flush();
+
             Result rc = conn.readResult();
             if (rc.failed()) {
                 logger.debug("COMMAND Result : rc={}", rc);
-                conn.readResult(); // ignored
+                conn.readResult(); // trailing
                 throw new ConnectionException(rc);
             }
 
-            int pos = 0;
             byte[] buffer = new byte[2048 * 4];
-            while (pos < size) {
+            int remaining = size;
+            while (remaining > 0) {
                 rc = conn.readResult();
                 if (rc.failed()) {
-                    conn.readResult();
+                    conn.readResult(); // trailing
                     throw new ConnectionException(rc);
                 }
                 int len = readCompressed(buffer);
-                System.arraycopy(buffer, 0, target, pos, len);
-                pos += len;
+                consumer.accept(buffer, 0, len);
+                remaining -= len;
             }
-            conn.readResult(); // ignored
-            return ByteBuffer.wrap(target);
-        });
+            conn.readResult(); // trailing
+        }
+    }
+
+    /** Wrapper OutputStream (dump fichier). */
+    public void readmem(long start, int size, OutputStream to) throws IOException {
+        readmemInternal(start, size, to::write);
+    }
+
+    /** Wrapper byte[] (peek). */
+    public ByteBuffer readmem(long addr, int size, byte[] bytes) {
+        final byte[] target = (bytes == null) ? new byte[size] : bytes;
+        final int[] pos = {0};
+        try {
+            readmemInternal(addr, size, (buf, off, len) -> {
+                System.arraycopy(buf, off, target, pos[0], len);
+                pos[0] += len;
+            });
+        } catch (IOException e) {
+            throw new ConnectionException(e); // arraycopy ne lève pas IOException, sécurité
+        }
+        return ByteBuffer.wrap(target);
     }
 
     public Result resume() {
@@ -373,23 +370,87 @@ public class Debugger implements Commands, Closeable {
         getResult(EDebCommand.COMMAND_DISCONNECT, "This is impossible, so you've done something terribly wrong");
     }
 
-    public void getBookmark() {
-        withLock(() -> {
+    /**
+     * Récupère la liste des bookmarks depuis la Switch (commande 0x1B).
+     * Protocole : envoie 0x1B, puis boucle { envoie cont=1, lit count, lit count bytes LZ,
+     * décompresse } jusqu'à count=0, puis lit le rc final.
+     *
+     * @return liste des adresses (8 bytes LE chacune) contenues dans le bookmark
+     */
+    public List<Long> getBookmark() {
+        return withLock(() -> {
             conn.writeCommand(COMMAND_GET_BOOKMARK);
             conn.flush();
-            int count = conn.readInt();
-            logger.debug("Bookmark count : {}", count);
-            conn.writeCommand(COMMAND_STATUS);
-            conn.flush();
-            int count2 = conn.readInt();
-            logger.debug("Bookmark count2 : {}", count2);
+
+            List<Long> addresses = new ArrayList<>();
+            byte[] compressed = new byte[2048 * 32 * 2];   // 128KB max (taille compressée)
+            byte[] decompressed = new byte[2048 * 32];      // 64KB (GECKO_BUFFER_SIZE)
+
+            int count;
+            do {
+                conn.writeByte(1); // cont = 1 (continue)
+                conn.flush();
+
+                count = conn.readInt(); // taille du chunk compressé, 0 = fin
+                if (count == 0) {
+                    break;
+                }
+                if (count < 0 || count > compressed.length) {
+                    throw new ConnectionException("Protocol desync: bookmark count=0x"
+                            + Integer.toHexString(count));
+                }
+                conn.readFully(compressed, 0, count);
+                int len = lzUncompress(compressed, count, decompressed);
+                logger.debug("Bookmark chunk: compressed={}, decompressed={}", count, len);
+
+                ByteBuffer bb = ByteBuffer.wrap(decompressed, 0, len).order(ByteOrder.LITTLE_ENDIAN);
+                while (bb.remaining() >= 8) {
+                    addresses.add(bb.getLong());
+                }
+            } while (true);
 
             Result rc = conn.readResult();
             if (rc.failed()) {
-                conn.readResult(); // ignored
                 throw new ConnectionException(rc);
             }
+            logger.debug("Bookmark: {} addresses received", addresses.size());
+            return addresses;
         });
+    }
+
+    /** Décodeur LZ8 (portage de lz.cpp côté serveur). */
+    private static int lzUncompress(byte[] in, int insize, byte[] out) {
+        int inpos = 0, outpos = 0;
+        while (inpos < insize) {
+            int marker = in[inpos++] & 0xFF;
+            int front = marker >>> 4;   // high nibble
+            int back = marker & 0x0F;   // low nibble
+            if (front == 8) {
+                System.arraycopy(in, inpos, out, outpos, 8);
+            } else {
+                long mask = -1L << (8 * front); // 0xFFFF... << (8*front)
+                long inVal = readLongLE(in, inpos);
+                long backVal = readLongLE(out, outpos - (back + 1) * 8);
+                writeLongLE(out, outpos, (inVal & ~mask) | (backVal & mask));
+            }
+            inpos += front;
+            outpos += 8;
+        }
+        return outpos;
+    }
+
+    private static long readLongLE(byte[] b, int off) {
+        long v = 0;
+        for (int i = 7; i >= 0; i--) {
+            v = (v << 8) | (b[off + i] & 0xFFL);
+        }
+        return v;
+    }
+
+    private static void writeLongLE(byte[] b, int off, long v) {
+        for (int i = 0; i < 8; i++) {
+            b[off + i] = (byte) (v >>> (8 * i));
+        }
     }
 
     public long getCurrentTitleId() {
