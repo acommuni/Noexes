@@ -312,29 +312,26 @@ public class MemorySearchService extends Service<SearchResult> {
             }
 
             List<DumpIndex> indices = res.curr.getIndices();
-            // long read = 0;
-            // TODO : comprendre pourquoi cette valeur header ?
-            long read = 3026;
-
             long size = res.curr.getSize();
             long start = supplier.getStart();
+            int done = 0;
+            int total = indices.size();
             for (DumpIndex idx : indices) {
                 if (isCancelled() || idx.getAddress() >= supplier.getEnd() || idx.getEndAddress() <= start) {
                     continue;
                 }
-                updateMessage("Searching...");
+                updateMessage(String.format("Searching... %d/%d", done, total));
                 ByteBuffer b = res.curr.getBuffer(idx);
                 long addr = idx.getAddress();
                 if (addr < start) {
                     b.position((int) (start - addr));
                 }
                 search(res, b, addr, provider);
-                read += b.position();
-                // TODO : comprendre pourquoi cette valeur , taille par region (mini header ?)
-                read += 24;
-                updateProgress(read, size);
+                done++;
+                updateProgress(done, total); // progression basée sur le nb de régions traitées, pas les bytes
             }
-            logger.debug("Search=>Size:{},Read:{},Diff:{},Nb Region:{}", size, read, size - read, indices.size());
+            updateProgress(total, total); // 100%
+            logger.debug("Search=>Size:{},Nb Region:{}", size, indices.size());
             return;
         }
 

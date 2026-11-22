@@ -23,6 +23,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
@@ -79,6 +80,9 @@ public class SearchController implements IController {
 
     @FXML
     TextField floatValue;
+
+    @FXML
+    Button convertToHexBtn;
 
     @FXML
     ChoiceBox<ConversionType> conversionType;
@@ -150,6 +154,13 @@ public class SearchController implements IController {
 
         floatValue.setOnAction(event -> {
             convertValueToHex(event);
+        });
+
+        // Tout changement de texte (clavier, coller, programmatique) → bouton rouge gras
+        floatValue.textProperty().addListener((obs, oldText, newText) -> {
+            if (!newText.equals(oldText)) {
+                convertToHexBtn.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+            }
         });
 
         conversionType.setOnAction(event -> {
@@ -336,7 +347,14 @@ public class SearchController implements IController {
         }
     }
 
+    /** Valeur modifiée → bouton en rouge gras (indique une conversion en attente). */
+    public void onFloatValueChanged(KeyEvent event) {
+        convertToHexBtn.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+    }
+
     public void convertValueToHex(ActionEvent event) {
+        // Reset style : retour au gris fin après conversion
+        convertToHexBtn.setStyle("-fx-text-fill: #868686; -fx-font-weight: normal;");
         try {
             switch (conversionType.getValue()) {
                 case FLT:

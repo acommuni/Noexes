@@ -417,8 +417,6 @@ public class Debugger implements Commands, Closeable {
         conn.close();
     }
 
-    private byte[] compressedBuffer = new byte[2048 * 4 * 6];
-
     private static final int MAX_CHUNK_SIZE = 0x10000; // 64KB — marge de sécurité (serveur max = 8KB)
 
     private int readCompressed(byte[] buffer) {
@@ -442,11 +440,12 @@ public class Debugger implements Commands, Closeable {
                 throw new ConnectionException("Protocol desync: compressedLen=0x"
                         + Integer.toHexString(compressedLen));
             }
-            conn.readFully(compressedBuffer, 0, compressedLen);
+            byte[] compressed = new byte[compressedLen]; // alloué à la volée, libéré par le GC après usage
+            conn.readFully(compressed, 0, compressedLen);
             int pos = 0;
             for (int i = 0; i < compressedLen; i += 2) {
-                byte value = compressedBuffer[i];
-                int count = compressedBuffer[i + 1] & 0xFF;
+                byte value = compressed[i];
+                int count = compressed[i + 1] & 0xFF;
                 Arrays.fill(buffer, pos, pos + count, value);
                 pos += count;
             }

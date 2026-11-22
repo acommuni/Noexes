@@ -191,8 +191,7 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
                         return null;
                     }
                     curr = info[i++];
-                    // } while (!curr.isReadable() || curr.getNextAddress() < start);
-                } while (curr.getNextAddress() < start);
+                } while (!curr.isReadable() || curr.getNextAddress() < start);
                 if (curr.getAddress() >= end) {
                     return null;
                 }
