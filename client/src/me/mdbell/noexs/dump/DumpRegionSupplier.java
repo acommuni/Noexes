@@ -1,5 +1,6 @@
 package me.mdbell.noexs.dump;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -119,12 +120,14 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
 
             private void init() {
                 if (info == null) {
-                    info = conn.query(0, 10000);
-                    for (int i = 0; i < info.length; i++) {
-                        MemoryInfo in = info[i];
+                    MemoryInfo[] all = conn.query(0, 10000);
+                    // Pré-filtre : ne garde que les régions qui passent le filtre (lisibles, etc.)
+                    List<MemoryInfo> filtered = new ArrayList<>();
+                    for (MemoryInfo in : all) {
                         if (!filter.apply(in)) {
                             continue;
                         }
+                        filtered.add(in);
                         long addr = in.getAddress();
                         long next = in.getNextAddress();
                         if (start == 0) {
@@ -135,20 +138,19 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
                         }
                         size += in.getSize();
                     }
+                    info = filtered.toArray(new MemoryInfo[0]);
                 }
             }
 
             @Override
             public DumpRegion get() {
                 init();
-                MemoryInfo curr;
-                do {
-                    if (i >= info.length) {
-                        return null;
-                    }
-                    curr = info[i++];
-                } while (!filter.apply(curr));
-                return new DumpRegion(curr.getAddress(), curr.getNextAddress(), i, info.length);
+                if (i >= info.length) {
+                    return null;
+                }
+                MemoryInfo curr = info[i++];
+                // Passe le MemoryInfo pour que DumpRegion.isReadable() soit fiable
+                return new DumpRegion(curr.getAddress(), curr.getNextAddress(), i, info.length, curr);
             }
         };
     }
