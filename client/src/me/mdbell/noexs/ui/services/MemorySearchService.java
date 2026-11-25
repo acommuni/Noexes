@@ -16,9 +16,11 @@ import org.apache.logging.log4j.Logger;
 
 import javafx.concurrent.Service;
 import javafx.concurrent.Task;
+import me.mdbell.noexs.core.ConnectionException;
 import me.mdbell.noexs.core.Debugger;
 import me.mdbell.noexs.core.DebuggerStatus;
 import me.mdbell.noexs.core.MemoryInfo;
+import me.mdbell.noexs.core.ZoneToDump;
 import me.mdbell.noexs.dump.DumpIndex;
 import me.mdbell.noexs.dump.DumpOutputStream;
 import me.mdbell.noexs.dump.DumpRegion;
@@ -67,7 +69,7 @@ public class MemorySearchService extends Service<SearchResult> {
             try {
                 prevResult.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Unexpected error", e);
             }
         }
         prevResult = null;
@@ -194,7 +196,86 @@ public class MemorySearchService extends Service<SearchResult> {
 
     private class SearchTask extends Task<SearchResult> {
 
+        /**
+         * Envoie un batch de zones via readmemMulti (0x13) et écrit directement dans le dump.
+         * @return nombre de bytes écrits
+         */
+        private int flushBatch(List<ZoneToDump> batch, DumpOutputStream doutRaw, BufferedOutputStream dout) throws IOException {
+            if (batch.isEmpty()) return 0;
+            int dataSize = batch.get(0).dataSize();
+            CountingOut counter = new CountingOut(dout);
+            try {
+                doutRaw.setCurrentAddress(batch.get(0).address());
+                int written = conn.readmemMultiToStream(batch, counter);
+                dout.flush();
+                return written;
+            } catch (ConnectionException e) {
+                // Le batch multi a échoué en cours de route (ex: une zone chevauche une page non mappée).
+                // readmemMultiToStream écrit zone par zone : on ne relit que les zones pas encore écrites.
+                int zonesDone = (int) (counter.count / dataSize);
+                logger.warn("Batch multi read failed after {}/{} zones ({}) => per-zone fallback", zonesDone, batch.size(), e.getMessage());
+                int written = zonesDone * dataSize;
+                for (int i = zonesDone; i < batch.size(); i++) {
+                    ZoneToDump z = batch.get(i);
+                    written += dumpZoneResilient(z.address(), z.dataSize(), doutRaw, dout);
+                }
+                return written;
+            }
+        }
+
+        /** OutputStream déléguant qui compte les octets écrits (pour savoir où reprendre après un échec partiel). */
+        private static class CountingOut extends java.io.OutputStream {
+            final java.io.OutputStream delegate;
+            long count = 0;
+            CountingOut(java.io.OutputStream delegate) { this.delegate = delegate; }
+            @Override public void write(int b) throws IOException { delegate.write(b); count++; }
+            @Override public void write(byte[] b) throws IOException { delegate.write(b); count += b.length; }
+            @Override public void write(byte[] b, int off, int len) throws IOException { delegate.write(b, off, len); count += len; }
+            @Override public void flush() throws IOException { delegate.flush(); }
+        }
+
+        /**
+         * Lit une zone via readmem (0x06). Si la lecture échoue (page non mappée, Kernel desc=106...),
+         * la zone est ignorée : si aucun octet n'a été reçu, l'index courant est carrément supprimé
+         * (rien d'écrit dans le dump) ; si la lecture a échoué en cours de route, on conserve les
+         * octets déjà reçus (index partiel) et on ignore le reste. Aucun zéro n'est écrit, comme ça
+         * une recherche de la valeur 0 ne donne pas de faux positifs dans ces zones.
+         * La recherche parcourt le dump par DumpIndex (addr -> filePos), donc un trou est sans danger.
+         * @return nombre de bytes "traités" (toujours len, pour la progression)
+         */
+        private int dumpZoneResilient(long addr, int len, DumpOutputStream doutRaw, BufferedOutputStream dout) throws IOException {
+            CountingOut counter = new CountingOut(dout);
+            try {
+                doutRaw.setCurrentAddress(addr);
+                conn.readmem(addr, len, counter);
+                dout.flush();
+            } catch (ConnectionException e) {
+                if (counter.count == 0) {
+                    doutRaw.discardCurrentIndex(); // zone illisible ignorée, rien d'écrit
+                    logger.warn("Read failed at addr:{} size:{} ({}) => zone skipped", String.format("%#x", addr), len, e.getMessage());
+                } else {
+                    logger.warn("Read failed at addr:{} size:{} after {} bytes ({}) => keeping partial data, rest skipped", String.format("%#x", addr), len, counter.count, e.getMessage());
+                }
+            }
+            return len;
+        }
+
+
         private static final int DUMP_FRAGMENT_SIZE = 50_000_000;
+
+        /** Bascule entre l'ancienne méthode (readmem 0x06 par fragment) et la méthode multi (0x13 par batch). */
+        // Multi (0x13) désactivé par défaut : le serveur écrit les zones 0x13 en BRUT (pas de compression RLE
+        // comme le 0x06), donc plus de trafic USB, et une zone de 32KB chevauchant une page non mappée échoue
+        // entièrement (perte de 32KB) alors que le 0x06 découpe en chunks de 8KB (perte minimale).
+        // Mesuré : 0x06 = 3.25 Go / 402 s / 7.0 Mo/s ; 0x13 = 2.06 Go / 497 s / 3.96 Mo/s.
+        private static final boolean USE_MULTI_READ = false;
+        /** Seuil de taille de région pour le mode hybride : en dessous, readmem 0x06 simple (compressé) ;
+         *  au-dessus, batch multi 0x13. Utilisé uniquement si USE_MULTI_READ = true. */
+        private static final long MULTI_MIN_REGION_SIZE = 1024 * 1024;
+        /** Taille d'un fragment dans un batch multi (doit être ≤ 64KB, limite serveur GECKO_BUFFER_SIZE). */
+        private static final int BATCH_FRAGMENT = 32 * 1024;
+        /** Nombre de zones par appel readmemMulti (BATCH_FRAGMENT × BATCH_SIZE = 2MB par round-trip). */
+        private static final int BATCH_SIZE = 64;
         // private static final int DUMP_BUFFER_SIZE = 10000;
         private static final int DUMP_BUFFER_SIZE = 10000;
         SearchResult res;
@@ -431,7 +512,7 @@ public class MemorySearchService extends Service<SearchResult> {
                 doutRaw = dump.openStream();
 
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Error while creating dump file", e);
                 return null;
             }
             try (BufferedOutputStream dout = new BufferedOutputStream(doutRaw, 1024 * 1024)) {
@@ -465,9 +546,14 @@ public class MemorySearchService extends Service<SearchResult> {
 
                         continue;
                     }
-                    if (showDumpInfo) {
-                        logger.debug("Dumping region : {} =>size:{},addr:{}", r, size, addr);
-                    }
+                    long regionStartTS = System.currentTimeMillis();
+                    // Mode hybride : batch multi (0x13) uniquement pour les grandes régions,
+                    // les petites passent en readmem 0x06 simple (compressé, 1 round-trip de toute façon)
+                    boolean useMulti = USE_MULTI_READ && size <= MULTI_MIN_REGION_SIZE;
+                    // Batch multi : on accumule des fragments de BATCH_FRAGMENT dans une liste
+                    // et on les envoie par paquets de BATCH_SIZE via readmemMulti (0x13)
+                    List<ZoneToDump> batch = useMulti ? new ArrayList<>(BATCH_SIZE) : null;
+
                     while (size > 0 && !isCancelled()) {
                         long currentTS = System.currentTimeMillis();
                         long deltaTS = currentTS - lastUpdate;
@@ -476,14 +562,46 @@ public class MemorySearchService extends Service<SearchResult> {
                             prevRead = read;
                             lastUpdate = currentTS;
                         }
-                        int len = (int) Math.min(size, DUMP_FRAGMENT_SIZE);
-                        doutRaw.setCurrentAddress(addr);
-                        conn.readmem(addr, len, dout);
-                        dout.flush();
-                        size -= len;
-                        addr += len;
-                        read += len;
-                        realRead += len;
+
+                        if (useMulti) {
+                            int frag = (int) Math.min(size, BATCH_FRAGMENT);
+                            if (frag == BATCH_FRAGMENT) {
+                                // fragment plein → accumuler dans le batch
+                                batch.add(new ZoneToDump(addr, frag));
+                                if (batch.size() >= BATCH_SIZE) {
+                                    flushBatch(batch, doutRaw, dout);
+                                    read += batch.size() * (long) BATCH_FRAGMENT;
+                                    realRead += batch.size() * (long) BATCH_FRAGMENT;
+                                    size -= batch.size() * (long) BATCH_FRAGMENT;
+                                    addr += batch.size() * (long) BATCH_FRAGMENT;
+                                    batch.clear();
+                                } else {
+                                    size -= frag;
+                                    addr += frag;
+                                }
+                            } else {
+                                // dernier fragment partiel : flush le batch puis readmem simple.
+                                // size/addr ont DÉJÀ été avancés d'autant dans la branche else ci-dessus
+                                // (les fragments batchés y sont décomptés dès leur ajout au batch),
+                                // donc ici on ne fait que flush + compteur read (déféré jusqu'au flush).
+                                if (!batch.isEmpty()) {
+                                    int done = flushBatch(batch, doutRaw, dout);
+                                    read += done; realRead += done;
+                                    batch.clear();
+                                }
+                                dumpZoneResilient(addr, frag, doutRaw, dout);
+                                size -= frag; addr += frag;
+                                read += frag; realRead += frag;
+                            }
+                        } else {
+                            // === ANCIENNE MÉTHODE (readmem 0x06 par fragment) ===
+                            int len = (int) Math.min(size, DUMP_FRAGMENT_SIZE);
+                            dumpZoneResilient(addr, len, doutRaw, dout);
+                            size -= len;
+                            addr += len;
+                            read += len;
+                            realRead += len;
+                        }
 
                         double trueAverage = avg.getAverage();
                         long remaining = totalSize - read;
@@ -499,6 +617,17 @@ public class MemorySearchService extends Service<SearchResult> {
                                 NetUtils.formatSize(remaining), TimeUtils.formatTime((long) eta),
                                 TimeUtils.formatTime(elapsed)));
 
+                    }
+                    // Flush le batch multi restant à la fin de la région
+                    if (batch != null && !batch.isEmpty()) {
+                        int done = flushBatch(batch, doutRaw, dout);
+                        read += done;
+                        realRead += done;
+                        batch.clear();
+                    }
+                    if (showDumpInfo) {
+                        long regionDuration = System.currentTimeMillis() - regionStartTS;
+                        logger.debug("Dumping region : {} =>size:{},addr:{} duration:{}ms mode:{}", r, r.getSize(), r.getStart(), regionDuration, useMulti ? "multi" : "single");
                     }
                 }
             }

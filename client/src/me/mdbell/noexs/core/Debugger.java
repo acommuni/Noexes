@@ -303,15 +303,20 @@ public class Debugger implements Commands, Closeable {
 
             MemoryInfo[] res = new MemoryInfo[max];
             int count;
-            for (count = 0; count < max; count++) {
-                MemoryInfo info = readInfo();
-                res[count] = info;
-                memInfoCache.put(info.getAddress(), info); // pré-remplit le cache LRU
-                if (info.getType() == MemoryType.RESERVED) {
-                    break;
+            try {
+                for (count = 0; count < max; count++) {
+                    MemoryInfo info = readInfo();
+                    res[count] = info;
+                    memInfoCache.put(info.getAddress(), info); // pré-remplit le cache LRU
+                    if (info.getType() == MemoryType.RESERVED) {
+                        break;
+                    }
                 }
+            } catch (ConnectionException e) {
+                conn.readResult(); // trailing (écrit par le dispatcher même si un item a échoué) — sinon desync
+                throw e;
             }
-            conn.readResult(); // ignored here, it gets checked in readInfo()
+            conn.readResult(); // trailing, ignoré ici (le rc par item est vérifié dans readInfo())
             logger.debug("COMMAND query : read {} memory info", count);
             return Arrays.copyOf(res, count);
         });
@@ -492,7 +497,7 @@ public class Debugger implements Commands, Closeable {
 
     @FunctionalInterface
     private interface ThrowingConsumer<T> {
-        void accept(T t) throws Exception;
+        void accept(T t); // les lambdas ne doivent lancer que des RuntimeException (ConnectionException)
     }
 
     /**
@@ -511,13 +516,19 @@ public class Debugger implements Commands, Closeable {
             conn.flush();
 
             Result rc = conn.readResult();
-            if (rc.failed()) throw new ConnectionException(rc);
+            if (rc.failed()) {
+                conn.readResult(); // trailing (écrit par le dispatcher même en cas d'échec) — sinon desync
+                throw new ConnectionException(rc);
+            }
 
             List<MultiReadResult.ZoneRead> zoneReads = new ArrayList<>();
             int offset = 0;
             for (ZoneToDump z : zones) {
                 rc = conn.readResult();
-                if (rc.failed()) throw new ConnectionException(rc);
+                if (rc.failed()) {
+                    conn.readResult(); // trailing (écrit par le dispatcher même en cas d'échec) — sinon desync
+                    throw new ConnectionException(rc);
+                }
                 conn.readFully(all, offset, z.dataSize());
                 zoneReads.add(new MultiReadResult.ZoneRead(z.address(), offset, z.dataSize(),
                         ByteBuffer.wrap(all, offset, z.dataSize()).order(ByteOrder.LITTLE_ENDIAN).slice()));
@@ -525,6 +536,49 @@ public class Debugger implements Commands, Closeable {
             }
             conn.readResult(); // trailing
             return new MultiReadResult(zoneReads, totalSize, all);
+        });
+    }
+
+    /**
+     * 0x13 — Variante stream de readmemMulti : écrit les données directement dans {@code out}
+     * au fur et à mesure, sans buffer global en RAM. Toutes les zones doivent avoir le même dataSize.
+     *
+     * @return nombre total de bytes écrits
+     */
+    public int readmemMultiToStream(List<ZoneToDump> zones, OutputStream out) {
+        if (zones.isEmpty()) return 0;
+        return withLock(() -> {
+            int dataSize = zones.get(0).dataSize();
+            conn.writeCommand(COMMAND_READ_MULTI);
+            conn.writeInt(zones.size());
+            conn.writeInt(dataSize);
+            for (ZoneToDump z : zones) conn.writeLong(z.address());
+            conn.flush();
+
+            Result rc = conn.readResult();
+            if (rc.failed()) {
+                conn.readResult(); // trailing (écrit par le dispatcher même en cas d'échec) — sinon desync
+                throw new ConnectionException(rc);
+            }
+
+            byte[] buf = new byte[dataSize];
+            int total = 0;
+            for (ZoneToDump z : zones) {
+                rc = conn.readResult();
+                if (rc.failed()) {
+                    conn.readResult(); // trailing (écrit par le dispatcher même en cas d'échec) — sinon desync
+                    throw new ConnectionException(rc);
+                }
+                conn.readFully(buf, 0, z.dataSize());
+                try {
+                    out.write(buf, 0, z.dataSize());
+                } catch (IOException e) {
+                    throw new ConnectionException(e); // wrappe : withLock(Supplier) n'accepte pas les checked
+                }
+                total += z.dataSize();
+            }
+            conn.readResult(); // trailing
+            return total;
         });
     }
 

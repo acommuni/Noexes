@@ -34,6 +34,15 @@ public class DumpOutputStream extends OutputStream {
         curr.filePos = dataFile.getFilePointer();
     }
 
+    /**
+     * Annule l'index courant SANS l'ajouter à la liste (à n'appeler que si aucun octet
+     * n'a été écrit depuis le dernier setCurrentAddress) : permet de skipper une zone
+     * illisible sans laisser d'index vide et sans écrire de zéros.
+     */
+    public void discardCurrentIndex() {
+        curr = null;
+    }
+
     @Override
     public void write(int b) throws IOException {
         dataFile.write(b);

@@ -155,7 +155,7 @@ public class MainController implements NetworkConstants, IController {
                 cnxType = ConnectionType.USB;
             }
         } catch (UsbException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
 
         connectionType.getSelectionModel().select(cnxType); // TODO save/store this
@@ -235,7 +235,7 @@ public class MainController implements NetworkConstants, IController {
         try {
             debugger.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
     }
 
@@ -401,7 +401,7 @@ public class MainController implements NetworkConstants, IController {
         try {
             s.acquire();
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
     }
 

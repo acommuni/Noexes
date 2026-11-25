@@ -178,7 +178,7 @@ public class PointerSearchService extends Service<List<PointerSearchResult>> {
                 try {
                     computeSingle();
                 } catch (IOException | InterruptedException e) {
-                    e.printStackTrace();
+                    logger.error("Unexpected error", e);
                 }
             }
             return null;

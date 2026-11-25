@@ -13,6 +13,8 @@ import me.mdbell.noexs.code.CheatCodeMaker;
 
 public class CheatMakerController implements IController {
 
+    private static final org.apache.logging.log4j.Logger logger = org.apache.logging.log4j.LogManager.getLogger(CheatMakerController.class);
+
     private MainController mc;
 
     @FXML
@@ -51,7 +53,7 @@ public class CheatMakerController implements IController {
         try {
             FileUtils.writeStringToFile(f, cheatSource.getText(), StandardCharsets.UTF_8.name());
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
     }
 
@@ -64,7 +66,7 @@ public class CheatMakerController implements IController {
         try {
             cheatSource.setText(FileUtils.readFileToString(f, StandardCharsets.UTF_8.name()));
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
     }
 
@@ -82,7 +84,7 @@ public class CheatMakerController implements IController {
         try {
             FileUtils.writeStringToFile(f, cheatCode.getText(), StandardCharsets.US_ASCII.name());
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
     }
 

@@ -66,7 +66,7 @@ public class DebuggerConnectionService extends ScheduledService<IConnection> {
                                 return new UsbConnection(switchDevice);
                             }
                         } catch (UsbException e) {
-                            e.printStackTrace();
+                            logger.error("Unexpected error", e);
                         }
 
                         throw new UnsupportedOperationException("Unable to find switch on USB");

@@ -4,6 +4,8 @@ import java.util.concurrent.Semaphore;
 
 public class AutoReleaseSemaphore<E extends RuntimeException> implements AutoCloseable {
 
+    private static final org.apache.logging.log4j.Logger logger = org.apache.logging.log4j.LogManager.getLogger(AutoReleaseSemaphore.class);
+
     private Semaphore semaphore;
     private final Class<E> exceptionType;
 
@@ -21,13 +23,13 @@ public class AutoReleaseSemaphore<E extends RuntimeException> implements AutoClo
         try {
             semaphore.acquire();
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             RuntimeException re = null;
             try {
                 re = (RuntimeException) exceptionType.newInstance();
                 re.initCause(e);
             } catch (Throwable t) {
-                t.printStackTrace();
+                logger.error("Unexpected error", t);
             }
 
             if (re != null) {

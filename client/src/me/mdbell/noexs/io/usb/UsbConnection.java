@@ -73,7 +73,7 @@ public class UsbConnection implements IConnection {
             logger.debug("Pipes opened");
         } catch (Throwable e) {
             // TODO Auto-generated catch block
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
             throw e;
         }
     }

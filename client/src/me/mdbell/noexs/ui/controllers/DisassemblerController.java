@@ -67,7 +67,7 @@ public class DisassemblerController implements IController {
             List<CsToolWrapper.Insn> insns = CsToolWrapper.disasm(buffer, addr);
             instructionList.getItems().addAll(insns);
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
 
     }
@@ -116,7 +116,7 @@ public class DisassemblerController implements IController {
                 MainController.showMessage("Unable to assemble \"" + op + "\"", Alert.AlertType.ERROR);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
     }
 }

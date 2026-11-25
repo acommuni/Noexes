@@ -123,7 +123,7 @@ public class OpCodeOperation {
             }
         } catch (Throwable e) {
             // TODO Auto-generated catch block
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
         return res;
     }
@@ -172,7 +172,7 @@ public class OpCodeOperation {
             }
         } catch (IllegalAccessException e) {
             // TODO Auto-generated catch block
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
 
         String resStr = null;
@@ -204,7 +204,7 @@ public class OpCodeOperation {
             }
         } catch (Exception e) {
             // TODO Auto-generated catch block
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
         return frPattern;
     }

@@ -458,7 +458,7 @@ public class SearchController implements IController {
             try {
                 result.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Unexpected error", e);
             }
         }
         result = null;
@@ -501,7 +501,7 @@ public class SearchController implements IController {
         try {
             result.close();
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
         result = prev;
         searchService.setPrevResult(result);
@@ -560,7 +560,6 @@ public class SearchController implements IController {
             searchService.setPrevResult(null);
             mc.setStatus("Search failed!");
             Throwable t = value.getSource().getException();
-            t.printStackTrace();
             logger.error("Search failure", t);
             MainController.showMessage(t);
             searchOptions.setDisable(false);
@@ -589,7 +588,7 @@ public class SearchController implements IController {
                     long curr = result.getCurr(addr);
                     resultList.add(new SearchValueModel(addr, result.getPrev(addr), result.getCurr(addr)));
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    logger.error("Unexpected error", e);
                     break;
                 }
             }

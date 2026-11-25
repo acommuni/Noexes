@@ -10,6 +10,8 @@ import org.apache.commons.io.FilenameUtils;
 
 public class DebugDump {
 
+    private static final org.apache.logging.log4j.Logger logger = org.apache.logging.log4j.LogManager.getLogger(DebugDump.class);
+
     private static DateTimeFormatter LINE_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd-HH:mm:ss.SSS");
 
     private File debugFile;
@@ -35,7 +37,7 @@ public class DebugDump {
 
             } catch (IOException e) {
                 // TODO Auto-generated catch block
-                e.printStackTrace();
+                logger.error("Unexpected error", e);
             }
         }
     }

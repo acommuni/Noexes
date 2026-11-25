@@ -125,7 +125,7 @@ public class UtilsController implements IController {
             }
             infoLabel.setText(sb.toString());
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
     }
 

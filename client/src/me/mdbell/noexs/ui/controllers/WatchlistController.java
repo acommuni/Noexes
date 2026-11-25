@@ -216,7 +216,7 @@ public class WatchlistController implements IController {
             });
 
         } catch (FileNotFoundException e) {
-            e.printStackTrace();
+            logger.error("Unexpected error", e);
         }
     }
 

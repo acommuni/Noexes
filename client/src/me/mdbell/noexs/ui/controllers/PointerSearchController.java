@@ -325,7 +325,7 @@ public class PointerSearchController implements IController {
 
         searchService.setOnFailed(event1 -> {
             mc.setStatus("Search Failed!");
-            event1.getSource().getException().printStackTrace();
+            logger.error("Unexpected error", event1.getSource().getException());
             toggleInput(false);
         });
 

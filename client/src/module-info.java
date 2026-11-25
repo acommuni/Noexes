@@ -13,6 +13,7 @@ module JNoexes {
     requires org.apache.commons.collections4;
     requires org.apache.logging.log4j.core;
     requires org.apache.logging.log4j;
+    requires com.lmax.disruptor; // nécessaire pour AsyncLogger/AsyncRoot (log4j2 async)
     requires org.reflections;
 
     requires org.antlr.antlr4.runtime;
