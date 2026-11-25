@@ -362,6 +362,7 @@ static Result _current_pid(Gecko::Context& ctx){
 
 
 //0x0E
+/*
 static Result _current_pid2(Gecko::Context& ctx){
     u64 pid;
     bool dmnthascht;
@@ -386,7 +387,7 @@ static Result _current_pid2(Gecko::Context& ctx){
     WRITE_CHECKED(ctx, pid);
     printf("pid = %lx\n",pid);
     return rc;
-}
+}*/
 
 //0x0F
 static Result _attached_pid(Gecko::Context& ctx){

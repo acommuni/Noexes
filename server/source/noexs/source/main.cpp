@@ -5,6 +5,9 @@
 #include "gecko.h"
 #include "dmntcht.h"
 
+#define ASSERT_EXIT(x) if (R_FAILED(x)) std::exit(1)
+#define ASSERT_FATAL(x) if (Result res = x; R_FAILED(res)) fatalThrow(res)
+
 extern "C" {
 	extern u32 __start__;
 
@@ -38,8 +41,16 @@ void __libnx_initheap(void) {
 
 // See : https://github.com/switchbrew/libnx/blob/master/nx/source/runtime/init.c#L112
 void __appInit(void) {
-	Result rc;
+	
+    
+    Result rc;
 
+    rc = timeInitialize();
+    if(R_FAILED(rc)) {
+        printf("Failed to init time services, error code %d\n", rc);
+    }
+
+    
     rc = smInitialize();
 	if (R_FAILED(rc)) {
 		fatalThrow(MAKERESULT(Module_Libnx, LibnxError_InitFail_SM));
@@ -107,6 +118,7 @@ void __appExit(void) {
     ldrDmntExit();
     // nsdevExit();
     dmntchtExit();
+    timeExit();
 	smExit();
 }
 
@@ -160,13 +172,50 @@ static Result _eventCallback(Gecko::DebugEvent event){
 }
 
 
+void threadFuncNetworkLoop(void* arg)
+{
+    printf("[NetworkLoop] Starting network loop Thread\n");
+    
+    for (int i=0;i<10;i++) {
+        printf("[NetworkLoop] Loop : %d => Status=%d\n", i, g_Context.status);
+        svcSleepThread(1000000000);
+    }
+
+    void  *ptr = &g_Context;    
+    printf("[NetworkLoop] Pointer on context %p\n", (void*)ptr);
+
+    printf("[NetworkLoop] Exit network loop Thread\n");
+}
+
 
 int main(int argc, char **argv)
 {
     g_debugFile = fopen("/atmosphere/logs/GeckoLog.txt", "a");//w or a
     g_Context.dbg.addEventCallback(_eventCallback);
 
-    printf("Starting Gecko gateway\n");
+    printf("[Main] Starting Gecko gateway\n");
+
+    time_t timer  = time(NULL);
+	struct tm* timerTm = localtime(&timer);
+    printf(">>[%04d-%02d-%02d %02d:%02d:%02d]\n", timerTm->tm_year+1900, timerTm->tm_mon+1, timerTm->tm_mday, timerTm->tm_hour, timerTm->tm_min, timerTm->tm_sec);
+
+
+    Thread threadNetwork;
+    Result rcTN;
+    rcTN = threadCreate(&threadNetwork, threadFuncNetworkLoop, NULL, NULL, 0x10000, 0x2C, -2);
+
+    if (R_SUCCEEDED(rcTN))
+    {
+        printf("[Main] Network loop Thread created\n");
+        Result rcTNS = threadStart(&threadNetwork);
+        if (R_SUCCEEDED(rcTNS))
+        {   
+            printf("[Main] Network loop Thread created\n");
+        }
+    }
+
+    void *ptr = &g_Context;    
+    printf("[Main] Pointer on context %p\n", (void*)ptr);
 
     while(appletMainLoop() && !g_Context.exit){
         g_Context.reset();
@@ -179,7 +228,7 @@ int main(int argc, char **argv)
         }
     }
 
-    printf("Stoping Gecko gateway\n");
+    printf("[Main] Stoping Gecko gateway\n");
 
     if(g_debugFile){
         fclose(g_debugFile);
