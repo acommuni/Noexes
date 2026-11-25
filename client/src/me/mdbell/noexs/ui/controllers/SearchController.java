@@ -38,6 +38,7 @@ import me.mdbell.noexs.dump.DumpRegionSupplier;
 import me.mdbell.noexs.ui.models.ConditionType;
 import me.mdbell.noexs.ui.models.ConversionType;
 import me.mdbell.noexs.ui.models.DataType;
+import me.mdbell.noexs.ui.models.ReadMode;
 import me.mdbell.noexs.ui.models.Range;
 import me.mdbell.noexs.ui.models.RangeType;
 import me.mdbell.noexs.ui.models.SearchType;
@@ -62,6 +63,9 @@ public class SearchController implements IController {
     ComboBox<SearchType> searchConditionTypeDropdown;
     @FXML
     ComboBox<ConditionType> searchConditionDropdown;
+
+    @FXML
+    ComboBox<ReadMode> readModeDropdown;
 
     @FXML
     AddressSpinner searchStart;
@@ -184,6 +188,9 @@ public class SearchController implements IController {
 
         searchConditionDropdown.getItems().addAll(ConditionType.values());
         searchConditionDropdown.getSelectionModel().select(ConditionType.EQUALS);
+
+        readModeDropdown.getItems().addAll(ReadMode.values());
+        readModeDropdown.getSelectionModel().select(ReadMode.SINGLE_COMP); // défaut : single (comp)
 
         searchConditionDropdown.getSelectionModel().selectedItemProperty()
                 .addListener((observable, oldValue, newValue) -> updateCondition());
@@ -541,6 +548,7 @@ public class SearchController implements IController {
         searchService.setCompareType(compareType);
         searchService.setDataType(dataType);
         searchService.setKnownValue(known);
+        searchService.setReadMode(readModeDropdown.getValue());
 
         searchService.setOnSucceeded(v -> {
             result = (SearchResult) v.getSource().getValue();

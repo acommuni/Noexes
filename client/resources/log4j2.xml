@@ -15,10 +15,6 @@
       </RollingFile>
    </Appenders>
    <Loggers>
-      <AsyncLogger level="trace" additivity="false">
-         <AppenderRef ref="Console" />
-         <AppenderRef ref="RollingFile" />
-      </AsyncLogger>
       <Root level="trace">
          <AppenderRef ref="Console" />
          <AppenderRef ref="RollingFile" />

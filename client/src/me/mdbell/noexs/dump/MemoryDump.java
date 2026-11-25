@@ -132,8 +132,14 @@ public class MemoryDump implements Closeable {
         return new DumpOutputStream(this, indices, dump);
     }
 
+    private boolean closed = false;
+
     @Override
     public void close() throws IOException {
+        if (closed) {
+            return; // déjà fermé (ex: fin de dump) — sinon writeHeader plante sur un RandomAccessFile fermé (Stream Closed)
+        }
+        closed = true;
         writeHeader();
         cache.clear();
         indices.clear();

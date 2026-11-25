@@ -19,14 +19,15 @@ import org.apache.logging.log4j.Logger;
 import me.mdbell.noexs.core.debugger.EDebCommand;
 import me.mdbell.noexs.core.debugger.EMemoryAccess;
 import me.mdbell.noexs.core.debugger.RDebAttachInput;
+import me.mdbell.noexs.core.debugger.RDebCurrentPidOutput;
 import me.mdbell.noexs.core.debugger.RDebFreezeAddressInput;
 import me.mdbell.noexs.core.debugger.RDebFreezeAddressOutput;
-import me.mdbell.noexs.core.debugger.RDebResolvePointerOutput;
-import me.mdbell.noexs.core.debugger.RDebCurrentPidOutput;
 import me.mdbell.noexs.core.debugger.RDebGetAttachedPidOutput;
 import me.mdbell.noexs.core.debugger.RDebGetPidsOutput;
 import me.mdbell.noexs.core.debugger.RDebGetTitleIdInput;
 import me.mdbell.noexs.core.debugger.RDebGetTitleIdOutput;
+import me.mdbell.noexs.core.debugger.RDebResolvePointerOutput;
+import me.mdbell.noexs.core.debugger.RDebSearchLocalInput;
 import me.mdbell.noexs.core.debugger.RDebSetBreakpointInput;
 import me.mdbell.noexs.core.debugger.RDebStatusOutput;
 import me.mdbell.noexs.core.utils.AutoReleaseSemaphore;
@@ -57,6 +58,9 @@ public class Debugger implements Commands, Closeable {
     public static final int CURRENT_PROTOCOL_VERSION = (NoexsApplication.VERSION_MAJOR << 16)
             | (NoexsApplication.VERSION_MINOR) << 8;
 
+    /** Version minimale du serveur supportant les extensions 0x30/0x31/0x32 : 1.1.158 (0x1019E). */
+    public static final int PROTOCOL_VERSION_JNOEXS_EXT = 0x1019E;
+
     public Debugger(IConnection conn) {
         this.conn = conn;
     }
@@ -82,10 +86,12 @@ public class Debugger implements Commands, Closeable {
         return withLock(() -> {
             RDebStatusOutput statusOutput = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_STATUS);
 
-            int status = statusOutput.status();
-            int major = statusOutput.major();
-            int minor = statusOutput.minor();
-            int patch = statusOutput.patch();
+            // & 0xFF : les champs du record sont des bytes SIGNÉS — patch 158 = 0x9E = -98 en signé,
+            // ce qui corrompait protocolVersion en négatif et faisait croire que 0x30+ n'étaient pas supportés.
+            int status = statusOutput.status() & 0xFF;
+            int major = statusOutput.major() & 0xFF;
+            int minor = statusOutput.minor() & 0xFF;
+            int patch = statusOutput.patch() & 0xFF;
 
             this.protocolVersion = (major << 16) | (minor << 8);
             Result rc = conn.readResult();
@@ -474,6 +480,34 @@ public class Debugger implements Commands, Closeable {
      * Boucle : envoie cont=1, lit count, lit count bytes, décompresse, jusqu'à count=0.
      * Le consumer reçoit chaque chunk décompressé.
      */
+    /**
+     * 0x16 — Recherche locale côté SERVEUR (COMMAND_SEARCH_LOCAL) sur [start, end].
+     * Le serveur streame des chunks LZ de paires (from u64, to u64 = valeur trouvée), 16 o/pair ;
+     * le client envoie cont=1 entre chaque chunk ; le flux se termine par count=0, puis trailing rc.
+     * searchSize : 0=8bit, 1=16bit, 2=32bit, 3=64bit. searchType : 0=EQ(value1), 1=RANGE(value1..value2).
+     *
+     * @return les paires [adresse, valeur] trouvées
+     */
+    public List<long[]> searchLocal(long start, long end, long value1, long value2, int searchSize, int searchType) {
+        return withLock(() -> {
+            DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_SEARCH_LOCAL,
+                    new RDebSearchLocalInput(start, end, value1, value2, searchSize, searchType));
+
+            List<long[]> results = new ArrayList<>();
+            readLzStream(null, bb -> {
+                while (bb.remaining() >= 16) {
+                    results.add(new long[]{bb.getLong(), bb.getLong()});
+                }
+            });
+
+            Result rc = conn.readResult(); // trailing
+            if (rc.failed()) {
+                throw new ConnectionException(rc);
+            }
+            return results;
+        });
+    }
+
     private void readLzStream(java.util.function.IntConsumer chunkSizeConsumer,
                               ThrowingConsumer<ByteBuffer> dataConsumer) {
         byte[] compressed = new byte[2048 * 32 * 2]; // 128KB max
@@ -501,10 +535,13 @@ public class Debugger implements Commands, Closeable {
     }
 
     /**
-     * 0x13 — Lecture batch de plusieurs zones en un seul round-trip.
-     * Retourne toutes les données concaténées dans un seul buffer avec les offsets de chaque zone.
+     * Lecture batch de plusieurs zones en un seul round-trip.
+     * Utilise la commande **0x32 compressée** si le serveur la supporte (>= 1.1.158),
+     * sinon retombe sur 0x13 brut. Retourne toutes les données concaténées dans un seul
+     * buffer avec les offsets de chaque zone.
      */
     public MultiReadResult readmemMulti(List<ZoneToDump> zones) {
+        if (isJnoexsExtSupported()) return readmemMultiCompressed(zones); // 0x32 par défaut
         return withLock(() -> {
             int totalSize = zones.stream().mapToInt(ZoneToDump::dataSize).sum();
             byte[] all = new byte[totalSize];
@@ -540,12 +577,24 @@ public class Debugger implements Commands, Closeable {
     }
 
     /**
-     * 0x13 — Variante stream de readmemMulti : écrit les données directement dans {@code out}
+     * Variante stream de readmemMulti : écrit les données directement dans {@code out}
      * au fur et à mesure, sans buffer global en RAM. Toutes les zones doivent avoir le même dataSize.
+     * Utilise la commande **0x32 compressée** si le serveur la supporte (>= 1.1.158), sinon 0x13 brut.
      *
      * @return nombre total de bytes écrits
      */
     public int readmemMultiToStream(List<ZoneToDump> zones, OutputStream out) {
+        if (isJnoexsExtSupported()) return readmemMultiCompressedToStream(zones, out); // 0x32 par défaut
+        return readmemMultiToStreamRaw(zones, out); // 0x13 brut
+    }
+
+    /**
+     * 0x13 brut — Variante stream de readmemMulti en clair (pas de compression RLE),
+     * utilisable même si le serveur supporte 0x32 (mode "multi (uncomp)").
+     *
+     * @return nombre total de bytes écrits
+     */
+    public int readmemMultiToStreamRaw(List<ZoneToDump> zones, OutputStream out) {
         if (zones.isEmpty()) return 0;
         return withLock(() -> {
             int dataSize = zones.get(0).dataSize();
@@ -579,6 +628,152 @@ public class Debugger implements Commands, Closeable {
             }
             conn.readResult(); // trailing
             return total;
+        });
+    }
+
+    /** @return true si le serveur connecté supporte les extensions JNoexs (0x30/0x31/0x32, serveur >= 1.1.158). */
+    public boolean isJnoexsExtSupported() {
+        return protocolVersion >= PROTOCOL_VERSION_JNOEXS_EXT;
+    }
+
+    /**
+     * 0x32 — Variante compressée (RLE) de readmemMultiToStream, supportée serveur >= 1.1.158.
+     * Même contrat que {@link #readmemMultiToStream} : écrit les données décompressées zone par
+     * zone dans {@code out}. Chaque zone est reçue par sous-chunks (rc + bloc compressé via
+     * {@link #readCompressed}); en cas d'échec d'une zone, le trailing est consommé avant de lever
+     * l'exception (sinon desync), et l'appelant peut reprendre zone par zone comme pour 0x13.
+     *
+     * @return nombre total de bytes décompressés écrits
+     */
+    public int readmemMultiCompressedToStream(List<ZoneToDump> zones, OutputStream out) {
+        if (zones.isEmpty()) return 0;
+        return withLock(() -> {
+            int dataSize = zones.get(0).dataSize();
+            conn.writeCommand(COMMAND_READ_MULTI_COMPRESSED);
+            conn.writeInt(zones.size());
+            conn.writeInt(dataSize);
+            for (ZoneToDump z : zones) conn.writeLong(z.address());
+            conn.flush();
+
+            Result rc = conn.readResult();
+            if (rc.failed()) {
+                conn.readResult(); // trailing (écrit par le dispatcher même en cas d'échec) — sinon desync
+                throw new ConnectionException(rc);
+            }
+
+            // sous-chunks serveur ≤ GECKO_BUFFER_SIZE2 (8KB) ; marge si dataSize < 8KB
+            byte[] buf = new byte[Math.max(dataSize, 0x2000)];
+            int total = 0;
+            for (ZoneToDump z : zones) {
+                int received = 0;
+                while (received < z.dataSize()) {
+                    rc = conn.readResult();
+                    if (rc.failed()) {
+                        conn.readResult(); // trailing — sinon desync
+                        throw new ConnectionException(rc);
+                    }
+                    int len = readCompressed(buf);
+                    if (len <= 0) {
+                        conn.readResult(); // trailing — sinon desync
+                        throw new ConnectionException("Protocol desync: empty compressed chunk");
+                    }
+                    try {
+                        out.write(buf, 0, len);
+                    } catch (IOException e) {
+                        throw new ConnectionException(e); // wrappe : withLock(Supplier) n'accepte pas les checked
+                    }
+                    received += len;
+                    total += len;
+                }
+            }
+            conn.readResult(); // trailing
+            return total;
+        });
+    }
+
+    /**
+     * 0x32 — Variante buffer de readmemMultiCompressedToStream : remplit un seul {@code byte[]}
+     * avec les zones concaténées et retourne les offsets de chaque zone (comme readmemMulti).
+     * Le verrou est pris par readmemMultiCompressedToStream (ne pas wrapper dans withLock ici).
+     */
+    public MultiReadResult readmemMultiCompressed(List<ZoneToDump> zones) {
+        int totalSize = zones.stream().mapToInt(ZoneToDump::dataSize).sum();
+        byte[] all = new byte[totalSize];
+        int[] pos = {0};
+        OutputStream out = new OutputStream() {
+            @Override
+            public void write(int b) {
+                all[pos[0]++] = (byte) b;
+            }
+
+            @Override
+            public void write(byte[] b, int off, int len) {
+                System.arraycopy(b, off, all, pos[0], len);
+                pos[0] += len;
+            }
+        };
+        readmemMultiCompressedToStream(zones, out);
+
+        List<MultiReadResult.ZoneRead> zoneReads = new ArrayList<>();
+        int offset = 0;
+        for (ZoneToDump z : zones) {
+            zoneReads.add(new MultiReadResult.ZoneRead(z.address(), offset, z.dataSize(),
+                    ByteBuffer.wrap(all, offset, z.dataSize()).order(ByteOrder.LITTLE_ENDIAN).slice()));
+            offset += z.dataSize();
+        }
+        return new MultiReadResult(zoneReads, totalSize, all);
+    }
+
+    /**
+     * 0x30 — Liste les adresses freezées du processus (nécessite DMNT attaché, commande 0x1A).
+     * Protocole : rc, count (u64), puis count entrées {address (u64), value (u64), width (u8)}, trailing.
+     */
+    public List<FrozenAddress> getFrozenAddresses() {
+        return withLock(() -> {
+            conn.writeCommand(COMMAND_GET_FROZEN_ADDRESSES);
+            conn.flush();
+
+            Result rc = conn.readResult();
+            if (rc.failed()) {
+                conn.readResult(); // trailing — sinon desync
+                throw new ConnectionException(rc);
+            }
+            long count = conn.readLong();
+            if (count < 0 || count > 1_000_000) {
+                conn.readResult(); // trailing — sinon desync
+                throw new ConnectionException("Protocol desync: frozen count=0x" + Long.toHexString(count));
+            }
+            List<FrozenAddress> list = new ArrayList<>((int) Math.min(count, 4096));
+            for (long i = 0; i < count; i++) {
+                long address = conn.readLong();
+                long value = conn.readLong();
+                int width = conn.readByte() & 0xFF;
+                list.add(new FrozenAddress(address, value, width));
+            }
+            rc = conn.readResult(); // trailing
+            if (rc.failed()) {
+                throw new ConnectionException(rc);
+            }
+            return list;
+        });
+    }
+
+    /**
+     * 0x31 — Supprime le freeze d'une adresse (nécessite DMNT attaché, commande 0x1A).
+     * Protocole : address (u64) en entrée, rc, trailing.
+     */
+    public void unfreezeAddress(long address) {
+        withLock(() -> {
+            conn.writeCommand(COMMAND_DISABLE_FROZEN_ADDRESS);
+            conn.writeLong(address);
+            conn.flush();
+
+            Result rc = conn.readResult();
+            if (rc.failed()) {
+                conn.readResult(); // trailing — sinon desync
+                throw new ConnectionException(rc);
+            }
+            conn.readResult(); // trailing
         });
     }
 

@@ -167,13 +167,35 @@ public abstract class DumpRegionSupplier implements Supplier<DumpRegion> {
                 return end;
             }
 
-            @Override
-            public long getRealSize() {
-                return getSize();
-            }
-
             MemoryInfo[] info;
             int i = 0;
+            long realSize = -1; // -1 = pas encore calculé
+
+            @Override
+            public long getRealSize() {
+                // Vraie taille lisible = somme des tailles des régions LISIBLES clippées à [start,end],
+                // et non end-start (qui inclut les trous non mappés entre régions).
+                if (realSize < 0) {
+                    if (info == null) {
+                        info = conn.query(start, 10000);
+                    }
+                    realSize = 0;
+                    for (MemoryInfo in : info) {
+                        if (in.getAddress() >= end) {
+                            break;
+                        }
+                        if (!in.isReadable()) {
+                            continue;
+                        }
+                        long s = Math.max(in.getAddress(), start);
+                        long e = Math.min(in.getNextAddress(), end);
+                        if (e > s) {
+                            realSize += e - s;
+                        }
+                    }
+                }
+                return realSize;
+            }
 
             @Override
             public String getDescription() {

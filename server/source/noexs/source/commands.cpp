@@ -600,72 +600,34 @@ static Result processlocal(Gecko::Context &ctx, u64 m_start, u64 m_end, u64 m_va
                     printf("break1 rc= %x \n", (int)rc);
                     break;
                 }
-                // screening
-                for (u32 i = 0; i < len; i += 8) {
-                    switch (searchsize) {
-                    case _8:
-                        switch (searchtype) {
-                        case EQ:
-                            if (NEQvalue(u8, 0) && NEQvalue(u8, 1) && NEQvalue(u8, 2) && NEQvalue(u8, 3) && NEQvalue(u8, 4) && NEQvalue(u8, 5) && NEQvalue(u8, 6) && NEQvalue(u8, 7))
-                                continue;
-                            break;
-                        case RANGE:
-                            if (NRGvalue(u8, 0) && NRGvalue(u8, 1) && NRGvalue(u8, 2) && NRGvalue(u8, 3) && NRGvalue(u8, 4) && NRGvalue(u8, 5) && NRGvalue(u8, 6) && NRGvalue(u8, 7))
-                                continue;
-                            break;
+                // screening — chaque position est testée (pas = taille de la valeur) et l'adresse
+                // reportée est celle du match. Corrige l'ancien "pas de 8 + from=addr+i" qui donnait
+                // des adresses fausses de -4 (match sur le demi-mot haut) et collapsait les 2 matchs
+                // d'un même mot de 8 octets en une seule paire.
+                {
+                    u32 step = (u32)1 << (u32)searchsize; // _8→1, _16→2, _32→4, _64→8
+                    for (u32 i = 0; i + step <= len; i += step) {
+                        u64 val;
+                        u64 target1 = m_value1;
+                        u64 target2 = m_value2;
+                        switch (searchsize) {
+                        case _8:  val = *reinterpret_cast<u8 *>(&ctx.buffer[i]);  target1 &= 0xFFULL;       target2 &= 0xFFULL;       break;
+                        case _16: val = *reinterpret_cast<u16*>(&ctx.buffer[i]); target1 &= 0xFFFFULL;     target2 &= 0xFFFFULL;     break;
+                        case _32: val = *reinterpret_cast<u32*>(&ctx.buffer[i]); target1 &= 0xFFFFFFFFULL; target2 &= 0xFFFFFFFFULL; break;
+                        default:  val = *reinterpret_cast<u64*>(&ctx.buffer[i]); break; // _64
                         }
-                        break;
-                    case _16:
-                        switch (searchtype) {
-                        case EQ:
-                            if (NEQvalue(u16, 0) && NEQvalue(u16, 2) && NEQvalue(u16, 4) && NEQvalue(u16, 6))
-                                continue;
-                            break;
-                        case RANGE:
-                            if (NRGvalue(u16, 0) && NRGvalue(u16, 2) && NRGvalue(u16, 4) && NRGvalue(u16, 6))
-                                continue;
-                            break;
-                        }
-                        break;
-                    case _32:
-                        switch (searchtype) {
-                        case EQ:
-                            if (NEQvalue(u32, 0) && NEQvalue(u32, 4))
-                                continue;
-                            break;
-                        case RANGE:
-                            if (NRGvalue(u32, 0) && NRGvalue(u32, 4))
-                                continue;
-                            break;
-                        }
-                        break;
-                    case _64:
-                        switch (searchtype) {
-                        case EQ:
-                            if (NEQvalue(u64, 0))
-                                continue;
-                            break;
-                        case RANGE:
-                            if (NRGvalue(u64, 0))
-                                continue;
-                            break;
-                        }
-                        break;
-                    }
-                    to = *reinterpret_cast<u64 *>(&ctx.buffer[i]);
-                    // if (screen(to))
-                    {
-                        from = addr + i;
+                        bool match = (searchtype == EQ) ? (val == target1) : (val >= target1 && val <= target2);
+                        if (!match)
+                            continue;
+                        from = addr + i;   // adresse exacte du match
+                        to = val;          // valeur trouvée
                         // Fill buffer
                         *reinterpret_cast<u64 *>(&outbuffer[outbuffer_offset + out_index]) = from;
                         *reinterpret_cast<u64 *>(&outbuffer[outbuffer_offset + out_index + 8]) = to;
                         out_index += 16;
                         if (out_index == GECKO_BUFFER_SIZE) {
-                            // printf("ready to write\n");
                             s32 count = out_index;
-                            // compress option
                             count = LZ_Compress(outbuffer + outbuffer_offset, outbuffer, out_index);
-                            //
                             WRITE_CHECKED(ctx, count);
                             WRITE_BUFFER_CHECKED(ctx, outbuffer, count);
                             READ_CHECKED(ctx,cont); if (!cont) {WRITE_CHECKED(ctx, 0);READ_CHECKED(ctx, cont); return USER_ABORT;}
@@ -898,13 +860,106 @@ static Result _resolvepointers(Gecko::Context &ctx) {
     return rc;
 }
 
+//0x30 — Liste paginée des adresses freezées (nécessite DMNT attaché, commande 0x1A).
+//Protocole : rc(u32), si OK count(u64), puis count entrées {address(u64), value(u64), width(u8)}.
+static Result _get_frozen_addresses(Gecko::Context& ctx){
+    Result rc = 0;
+    u64 count = 0;
+    if (!dmnt) rc = MAKERESULT(Module_TCPGecko, TCPGeckoError_not_attached);
+    else rc = dmntchtGetFrozenAddressCount(&count);
+    WRITE_CHECKED(ctx, rc);
+    if(R_SUCCEEDED(rc)){
+        WRITE_CHECKED(ctx, count);
+        DmntFrozenAddressEntry* entries = reinterpret_cast<DmntFrozenAddressEntry*>(ctx.buffer);
+        u64 max_count = GECKO_BUFFER_SIZE / sizeof(DmntFrozenAddressEntry);
+        u64 offset = 0;
+        while(offset < count){
+            u64 out_count = 0;
+            rc = dmntchtGetFrozenAddresses(entries, max_count, offset, &out_count);
+            if(R_FAILED(rc)){
+                break;
+            }
+            for(u64 idx = 0; idx < out_count; idx++){ // "idx" : éviter la collision de nom avec le "int i" interne de la macro WRITE_CHECKED (-Wmaybe-uninitialized)
+                WRITE_CHECKED(ctx, entries[idx].address);
+                WRITE_CHECKED(ctx, entries[idx].value.value);
+                WRITE_CHECKED(ctx, entries[idx].value.width);
+            }
+            if(out_count == 0){
+                break; // évite une boucle infinie si le pager ne progresse pas
+            }
+            offset += out_count;
+        }
+    }
+    return rc;
+}
+
+//0x31 — Supprime le freeze d'une adresse (nécessite DMNT attaché).
+//Protocole : address(u64) en entrée, rc(u32) en sortie.
+static Result _disable_frozen_address(Gecko::Context& ctx){
+    u64 addr;
+    READ_CHECKED(ctx, addr);
+    Result rc;
+    if (!dmnt) rc = MAKERESULT(Module_TCPGecko, TCPGeckoError_not_attached);
+    else rc = dmntchtDisableFrozenAddress(addr);
+    WRITE_CHECKED(ctx, rc);
+    return rc;
+}
+
+//0x32 — Variante compressée (RLE) de _readmem_multi : chaque zone est lue par sous-chunks
+//de GECKO_BUFFER_SIZE2 max, et chaque sous-chunk est envoyé via writeCompressed
+//(flag u8, len u32, puis raw ou RLE). En cas d'échec de lecture d'une zone, on écrit le rc
+//d'échec et on arrête tout (le client bascule en relecture zone par zone).
+static Result _readmem_multi_compressed(Gecko::Context& ctx){
+    Result rc = 0;
+    u32 size;
+    u32 data_size;
+    u32 count = 0;
+    u64 addr;
+    bool* out = nullptr;
+    READ_CHECKED(ctx, size);
+    READ_CHECKED(ctx, data_size);
+    if (dmnt) rc = dmntchtHasCheatProcess(out);
+    else rc = ctx.dbg.attached();
+    WRITE_CHECKED(ctx, rc);
+    if(R_SUCCEEDED(rc)){
+        bool aborted = false;
+        for(count = 0; count < size && !aborted; count++){
+            READ_CHECKED(ctx, addr);
+            u32 remaining = data_size;
+            while(remaining > 0){
+                u32 len = remaining < GECKO_BUFFER_SIZE2 ? remaining : GECKO_BUFFER_SIZE2;
+                if (dmnt) rc = dmntchtReadCheatProcessMemory(addr, ctx.buffer, len);
+                else rc = ctx.dbg.readMem(ctx.buffer, addr, len);
+                WRITE_CHECKED(ctx, rc);
+                if(R_FAILED(rc)){
+                    aborted = true;
+                    break;
+                }
+                rc = writeCompressed(ctx, len);
+                if(R_FAILED(rc)){
+                    aborted = true;
+                    break;
+                }
+                addr += len;
+                remaining -= len;
+            }
+        }
+    }
+    return rc;
+}
+
 Result cmd_decode(Gecko::Context& ctx, int cmd){
     static Result (*cmds[287])(Gecko::Context &) = {NULL, _status, _poke8, _poke16, _poke32, _poke64, _readmem,
                                                     _writemem, _resume, _pause, _attach, _detatch, _querymem_single,
                                                     _querymem_multi, _current_pid, _attached_pid, _list_pids,
                                                     _get_titleid, _disconnect, _readmem_multi, _set_breakpoint, _freeze_address,
                                                     _search_local, _fetch_result, _detach_dmnt, _dump_ptr, _attach_dmnt,
-                                                    _getbookmark, _putbookmark, _dmnt_resume, _resolvepointers};
+                                                    _getbookmark, _putbookmark, _dmnt_resume, _resolvepointers,
+                                                    // 0x1F..0x2F : réservés (NULL)
+                                                    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                                                    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                                                    // 0x30..0x32 : extensions JNoexs
+                                                    _get_frozen_addresses, _disable_frozen_address, _readmem_multi_compressed};
     Result rc = 0;
     if(cmds[cmd]){
         rc = cmds[cmd](ctx);

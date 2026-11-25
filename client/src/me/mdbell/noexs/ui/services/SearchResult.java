@@ -97,6 +97,9 @@ public final class SearchResult implements Closeable {
     }
 
     public long getCurr(long addr) throws IOException {
+        if (curr == null) {
+            return 0; // mode local (0x16) : pas de dump, valeurs non relues localement
+        }
         return curr.getValue(addr, dataType.getSize());
     }
 
@@ -178,7 +181,7 @@ public final class SearchResult implements Closeable {
         SerializedSearchResult ss = new SerializedSearchResult();
         ss.location = this.location.getPath();
         try {
-            ss.memoryDumpSize = curr.getSize();
+            ss.memoryDumpSize = curr != null ? curr.getSize() : 0; // mode local (0x16) : pas de dump
             ss.dataType = this.dataType;
             ss.type = this.type;
             ss.start = this.start;

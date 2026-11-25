@@ -34,4 +34,9 @@ public interface Commands {
     int COMMAND_PUT_BOOKMARK = 0x1C;
     int COMMAND_DMNT_RESUME = 0x1D;
     int COMMAND_RESOLVE_POINTERS = 0x1E;
+
+    // Extensions JNoexs (0x30+) — nécessitent un serveur >= 1.1.158
+    int COMMAND_GET_FROZEN_ADDRESSES = 0x30;
+    int COMMAND_DISABLE_FROZEN_ADDRESS = 0x31;
+    int COMMAND_READ_MULTI_COMPRESSED = 0x32;
 }

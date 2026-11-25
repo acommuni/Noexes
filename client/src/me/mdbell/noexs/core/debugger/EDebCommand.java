@@ -31,7 +31,10 @@ public enum EDebCommand {
     COMMAND_GET_BOOKMARK(0x1B),        // protocole manuel (flux LZ)
     COMMAND_PUT_BOOKMARK(0x1C),        // protocole manuel (envoi fichier)
     COMMAND_DMNT_RESUME(0x1D),
-    COMMAND_RESOLVE_POINTERS(0x1E);    // input/output manuels (batch de chemins)
+    COMMAND_RESOLVE_POINTERS(0x1E),    // input/output manuels (batch de chemins)
+    COMMAND_GET_FROZEN_ADDRESSES(0x30), // protocole manuel (liste paginée d'entrées freezées)
+    COMMAND_DISABLE_FROZEN_ADDRESS(0x31), // protocole manuel (adresse u64 en entrée)
+    COMMAND_READ_MULTI_COMPRESSED(0x32); // protocole manuel (batch de zones, flux RLE par sous-chunk)
 
     private int code;
 
