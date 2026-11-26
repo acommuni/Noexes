@@ -2,6 +2,7 @@ package me.mdbell.noexs.core;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.RecordComponent;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,6 +19,17 @@ public class DebuggerUtils {
 
     private static final Logger logger = LogManager.getLogger(DebuggerUtils.class);
 
+    /**
+     * Borne de sanité pour un tableau lu dans un record de SORTIE. Le mécanisme record ne s'applique
+     * qu'à des structures de taille raisonnable (ex: liste des adresses freezées 0x30) — jamais aux
+     * gros volumes de données (readMem 0x06/0x13/0x32 restent en flux manuel). Si le count lu dépasse
+     * cette borne, c'est quasi certainement un desync de protocole : on lève une exception AVANT
+     * d'allouer le tableau (sinon OOM sur un count corrompu de plusieurs milliards).
+     * Les tableaux en ENTRÉE (writeRecord) ne sont pas bornés ici : leur taille est contrôlée par le
+     * client (ex: batch 0x32 = 64 zones max).
+     */
+    public static final int MAX_RECORD_ARRAY_LENGTH = 1_000_000;
+
     public static <T extends Record> T readRecord(IConnection connection, Class<T> recordCls) {
         RecordComponent[] recordComponents = recordCls.getRecordComponents();
         List<Object> values = new ArrayList<>();
@@ -26,12 +38,27 @@ public class DebuggerUtils {
             Object value = null;
             EDebDataType dt = null;
             if (type.isArray()) {
-                dt = EDebDataType.getDatatype(type.componentType());
+                Class<?> componentType = type.componentType();
                 int count = connection.readInt();
-                value = Array.newInstance(type.componentType(), count);
-                for (int i = 0; i < count; i++) {
-                    Object arrayValue = dt.getReadValueMethod().apply(connection);
-                    Array.set(value, i, arrayValue);
+                if (count < 0 || count > MAX_RECORD_ARRAY_LENGTH) {
+                    throw new ConnectionException("Protocol desync: record array '" + rc.getName() + "' count="
+                            + count + " exceeds MAX_RECORD_ARRAY_LENGTH=" + MAX_RECORD_ARRAY_LENGTH);
+                }
+                value = Array.newInstance(componentType, count);
+                if (Record.class.isAssignableFrom(componentType)) {
+                    // tableau de records : lecture récursive (ex: RDebFrozenAddressEntry[])
+                    dt = null;
+                    @SuppressWarnings("unchecked")
+                    Class<? extends Record> recordType = (Class<? extends Record>) componentType;
+                    for (int i = 0; i < count; i++) {
+                        Array.set(value, i, readRecord(connection, recordType));
+                    }
+                } else {
+                    dt = EDebDataType.getDatatype(componentType);
+                    for (int i = 0; i < count; i++) {
+                        Object arrayValue = dt.getReadValueMethod().apply(connection);
+                        Array.set(value, i, arrayValue);
+                    }
                 }
             } else {
                 dt = EDebDataType.getDatatype(type);
@@ -48,6 +75,9 @@ public class DebuggerUtils {
             } else {
                 if (type == byte.class) {
                     formatedValue = ((Byte) value) & 0xFFL;
+                } else if (type == byte[].class && value != null) {
+                    // byte[] : loggé comme une chaîne UTF-8 (ex: message de 0x33), pas octet par octet
+                    formatedValue = "\"" + new String((byte[]) value, StandardCharsets.UTF_8) + "\"";
                 }
             }
 
@@ -67,10 +97,37 @@ public class DebuggerUtils {
         RecordComponent[] recordComponents = recordCls.getRecordComponents();
         try {
             for (RecordComponent rc : recordComponents) {
-                EDebDataType dt = EDebDataType.getDatatype(rc.getType());
+                Class<?> type = rc.getType();
                 Object fieldValue = rc.getAccessor().invoke(record);
-                dt.getWriteValueMethod().accept(connection, fieldValue);
-                logger.debug("Field Write : {}->{}:{}={}", rc.getName(), rc.getType(), dt, fieldValue);
+                if (type.isArray()) {
+                    // tableau : int length + éléments (récursif si éléments sont des records)
+                    Class<?> componentType = type.componentType();
+                    int length = fieldValue == null ? 0 : Array.getLength(fieldValue);
+                    connection.writeInt(length);
+                    boolean logAsString = componentType == byte.class; // byte[] loggé comme chaîne UTF-8
+                    for (int i = 0; i < length; i++) {
+                        Object element = Array.get(fieldValue, i);
+                        if (Record.class.isAssignableFrom(componentType)) {
+                            @SuppressWarnings("unchecked")
+                            Class<? extends Record> recordType = (Class<? extends Record>) componentType;
+                            writeRecord(connection, recordType, element);
+                        } else {
+                            EDebDataType dt = EDebDataType.getDatatype(componentType);
+                            dt.getWriteValueMethod().accept(connection, element);
+                        }
+                        if (!logAsString) {
+                            logger.debug("Field Write : {}[{}]={}", rc.getName(), i, element);
+                        }
+                    }
+                    if (logAsString) {
+                        logger.debug("Field Write : {}->byte[{}]=\"{}\"", rc.getName(), length,
+                                fieldValue == null ? "" : new String((byte[]) fieldValue, StandardCharsets.UTF_8));
+                    }
+                } else {
+                    EDebDataType dt = EDebDataType.getDatatype(type);
+                    dt.getWriteValueMethod().accept(connection, fieldValue);
+                    logger.debug("Field Write : {}->{}:{}={}", rc.getName(), type, dt, fieldValue);
+                }
             }
         } catch (Throwable e) {
             logger.error("Error while writing value", e);

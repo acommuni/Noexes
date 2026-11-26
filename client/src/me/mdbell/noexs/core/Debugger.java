@@ -20,12 +20,17 @@ import me.mdbell.noexs.core.debugger.EDebCommand;
 import me.mdbell.noexs.core.debugger.EMemoryAccess;
 import me.mdbell.noexs.core.debugger.RDebAttachInput;
 import me.mdbell.noexs.core.debugger.RDebCurrentPidOutput;
+import me.mdbell.noexs.core.debugger.RDebDisableFrozenAddressInput;
+import me.mdbell.noexs.core.debugger.RDebFrozenAddressEntry;
 import me.mdbell.noexs.core.debugger.RDebFreezeAddressInput;
 import me.mdbell.noexs.core.debugger.RDebFreezeAddressOutput;
 import me.mdbell.noexs.core.debugger.RDebGetAttachedPidOutput;
+import me.mdbell.noexs.core.debugger.RDebGetFrozenAddressesOutput;
 import me.mdbell.noexs.core.debugger.RDebGetPidsOutput;
 import me.mdbell.noexs.core.debugger.RDebGetTitleIdInput;
 import me.mdbell.noexs.core.debugger.RDebGetTitleIdOutput;
+import me.mdbell.noexs.core.debugger.RDebLogMessageInput;
+import me.mdbell.noexs.core.debugger.RDebReadMultiCompressedInput;
 import me.mdbell.noexs.core.debugger.RDebResolvePointerOutput;
 import me.mdbell.noexs.core.debugger.RDebSearchLocalInput;
 import me.mdbell.noexs.core.debugger.RDebSetBreakpointInput;
@@ -60,6 +65,16 @@ public class Debugger implements Commands, Closeable {
 
     /** Version minimale du serveur supportant les extensions 0x30/0x31/0x32 : 1.1.158 (0x1019E). */
     public static final int PROTOCOL_VERSION_JNOEXS_EXT = 0x1019E;
+
+    /** Version minimale du serveur supportant la commande 0x33 (log client -> serveur) : 1.1.160 (0x101A0). */
+    public static final int PROTOCOL_VERSION_LOG_MESSAGE = 0x101A0;
+
+    /**
+     * Version minimale du serveur supportant le format "record" des extensions 0x30/0x31/0x32
+     * (pas de rc intermédiaire, count en u32, ordre record pour 0x32) : 1.1.161 (0x101A1).
+     * En dessous, le client retombe sur le protocole manuel 1.1.158-160.
+     */
+    public static final int PROTOCOL_VERSION_RECORD_EXT = 0x101A1;
 
     public Debugger(IConnection conn) {
         this.conn = conn;
@@ -636,6 +651,46 @@ public class Debugger implements Commands, Closeable {
         return protocolVersion >= PROTOCOL_VERSION_JNOEXS_EXT;
     }
 
+    /** @return true si le serveur supporte la commande 0x33 (log client -> serveur, >= 1.1.160). */
+    public boolean isLogMessageSupported() {
+        return protocolVersion >= PROTOCOL_VERSION_LOG_MESSAGE;
+    }
+
+    /** @return true si le serveur supporte le format record des extensions 0x30/0x31/0x32 (>= 1.1.161). */
+    public boolean isRecordExtSupported() {
+        return protocolVersion >= PROTOCOL_VERSION_RECORD_EXT;
+    }
+
+    /** @return la version du protocole négociée avec le serveur (ex: 0x1019E pour 1.1.158). */
+    public int getProtocolVersion() {
+        return protocolVersion;
+    }
+
+    /**
+     * 0x33 — Envoie un message de log au serveur (affiché dans GeckoLog.txt avec horodatage).
+     * Record en entrée {@link RDebLogMessageInput} (String sérialisée en int len + octets UTF-8),
+     * puis trailing rc. Ne rien faire si le serveur est trop vieux (>= 1.1.160 requis).
+     */
+    public void sendLogMessage(String msg) {
+        if (!isLogMessageSupported()) {
+            return;
+        }
+        withLock(() -> {
+            // cap 2048 octets UTF-8 côté client aussi : le serveur ne lit que 2048 octets,
+            // envoyer plus laisserait des octets dans le flux = desync avec le trailing rc
+            byte[] b = msg.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            final String capped = b.length > 2048
+                    ? new String(Arrays.copyOf(b, 2048), java.nio.charset.StandardCharsets.UTF_8)
+                    : msg;
+            DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_LOG_MESSAGE, new RDebLogMessageInput(capped));
+            Result rc = conn.readResult(); // trailing
+            logger.debug("COMMAND {} Result : rc={}", EDebCommand.COMMAND_LOG_MESSAGE, rc);
+            if (rc.failed()) {
+                throw new ConnectionException(rc);
+            }
+        });
+    }
+
     /**
      * 0x32 — Variante compressée (RLE) de readmemMultiToStream, supportée serveur >= 1.1.158.
      * Même contrat que {@link #readmemMultiToStream} : écrit les données décompressées zone par
@@ -649,13 +704,21 @@ public class Debugger implements Commands, Closeable {
         if (zones.isEmpty()) return 0;
         return withLock(() -> {
             int dataSize = zones.get(0).dataSize();
-            conn.writeCommand(COMMAND_READ_MULTI_COMPRESSED);
-            conn.writeInt(zones.size());
-            conn.writeInt(dataSize);
-            for (ZoneToDump z : zones) conn.writeLong(z.address());
-            conn.flush();
+            if (isRecordExtSupported()) {
+                // Serveur >= 1.1.161 : entrée record (int dataSize + long[] addresses)
+                long[] addresses = zones.stream().mapToLong(ZoneToDump::address).toArray();
+                DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_READ_MULTI_COMPRESSED,
+                        new RDebReadMultiCompressedInput(dataSize, addresses));
+            } else {
+                // Serveur 1.1.158..160 : protocole manuel (size, dataSize, adresses)
+                conn.writeCommand(COMMAND_READ_MULTI_COMPRESSED);
+                conn.writeInt(zones.size());
+                conn.writeInt(dataSize);
+                for (ZoneToDump z : zones) conn.writeLong(z.address());
+                conn.flush();
+            }
 
-            Result rc = conn.readResult();
+            Result rc = conn.readResult(); // rc intermédiaire (écrit par le handler après l'entrée)
             if (rc.failed()) {
                 conn.readResult(); // trailing (écrit par le dispatcher même en cas d'échec) — sinon desync
                 throw new ConnectionException(rc);
@@ -726,10 +789,28 @@ public class Debugger implements Commands, Closeable {
 
     /**
      * 0x30 — Liste les adresses freezées du processus (nécessite DMNT attaché, commande 0x1A).
-     * Protocole : rc, count (u64), puis count entrées {address (u64), value (u64), width (u8)}, trailing.
+     * Serveur >= 1.1.161 : record en sortie {@link RDebGetFrozenAddressesOutput}
+     * (int count + count entrées {address u64, value u64, width u8}), puis trailing rc.
+     * Serveur 1.1.158..160 : protocole manuel (rc, count u64, entrées, trailing).
      */
     public List<FrozenAddress> getFrozenAddresses() {
         return withLock(() -> {
+            if (isRecordExtSupported()) {
+                RDebGetFrozenAddressesOutput out = DebuggerUtils.runCommand(conn,
+                        EDebCommand.COMMAND_GET_FROZEN_ADDRESSES);
+                Result rc = conn.readResult(); // trailing
+                logger.debug("COMMAND {} Result : rc={}", EDebCommand.COMMAND_GET_FROZEN_ADDRESSES, rc);
+                if (rc.failed()) {
+                    throw new ConnectionException(rc);
+                }
+                RDebFrozenAddressEntry[] entries = out.entries();
+                List<FrozenAddress> list = new ArrayList<>(entries.length);
+                for (RDebFrozenAddressEntry e : entries) {
+                    list.add(new FrozenAddress(e.address(), e.value(), e.width() & 0xFF));
+                }
+                return list;
+            }
+            // --- protocole manuel 1.1.158..160 ---
             conn.writeCommand(COMMAND_GET_FROZEN_ADDRESSES);
             conn.flush();
 
@@ -760,10 +841,22 @@ public class Debugger implements Commands, Closeable {
 
     /**
      * 0x31 — Supprime le freeze d'une adresse (nécessite DMNT attaché, commande 0x1A).
-     * Protocole : address (u64) en entrée, rc, trailing.
+     * Serveur >= 1.1.161 : record en entrée {@link RDebDisableFrozenAddressInput}, puis trailing rc.
+     * Serveur 1.1.158..160 : address (u64) manuel, rc intermédiaire, trailing.
      */
     public void unfreezeAddress(long address) {
         withLock(() -> {
+            if (isRecordExtSupported()) {
+                DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_DISABLE_FROZEN_ADDRESS,
+                        new RDebDisableFrozenAddressInput(address));
+                Result rc = conn.readResult(); // trailing
+                logger.debug("COMMAND {} Result : rc={}", EDebCommand.COMMAND_DISABLE_FROZEN_ADDRESS, rc);
+                if (rc.failed()) {
+                    throw new ConnectionException(rc);
+                }
+                return;
+            }
+            // --- protocole manuel 1.1.158..160 ---
             conn.writeCommand(COMMAND_DISABLE_FROZEN_ADDRESS);
             conn.writeLong(address);
             conn.flush();

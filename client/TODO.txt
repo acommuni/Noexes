@@ -74,3 +74,422 @@ Commande Noexs : https://github.com/tomvita/PointerSearcher-SE/blob/master/Point
 
 https://deepwiki.com/Atmosphere-NX/Atmosphere/5.4-debug-monitor-and-cheat-engine
 
+
+=== ReadMemMulti compresse en commande 0x32 (extension JNoexs) — IMPLEMENTE (serveur 1.1.158 + client) ===
+IMPLEMENTE : handler _readmem_multi_compressed enregistre positionnellement a cmds[0x32]
+(31 handlers 0x00-0x1E + 17 NULL 0x1F-0x2F + 0x30/0x31/0x32), VER_PATCH bumpe 157 -> 158.
+Client : Debugger.readmemMultiCompressedToStream (0x32) avec fallback 0x13 via
+isJnoexsExtSupported() (protocolVersion >= 0x1019E) dans MemorySearchService.flushBatch.
+Detail implementation : sous-chunks GECKO_BUFFER_SIZE2, writeCompressed par chunk, abort des
+2 boucles en cas d'echec, trailing lu avant throw cote client. A NOTER : le serveur ne repond
+pas invalid_cmd si 0x32 manque — le client decide via la version, pas via le rc.
+
+PLAN ORIGINAL (conserve) :
+Nouvelle commande 0x32 READ_MEM_MULTI_COMPRESSED (convention 0x30+ = extensions JNoexs).
+On NE MODIFIE PAS le 0x13 existant : compatibilite ascendante, le client fait un fallback
+sur 0x13 brut si le vieux sysmodule ne connait pas 0x32 (cmds[0x32] == NULL -> invalid_cmd).
+Objectif : le 0x13 envoie les zones en BRUT (WRITE_BUFFER_CHECKED) alors que le 0x06 compresse
+chaque chunk de 8KB en RLE via writeCompressed. Mesures : 0x06 = ~7-9 Mo/s, 0x13 brut = ~4 Mo/s.
+Le multi batch (2 Mo/round-trip) ne sert a rien tant que les donnees ne sont pas compressees.
+
+COTE SERVEUR (server/source/noexs/source/commands.cpp) :
+- Nouveau handler _readmem_multi_compressed, enregistre dans le dispatcher via
+  initialiseur designe : [0x32] = _readmem_multi_compressed  (cmds[287], index 0x32 OK).
+- Copier _readmem_multi (~ligne 436) puis remplacer, par zone, le "rc + WRITE_BUFFER_CHECKED
+  brut" par une boucle en sous-chunks de 8KB com presses (voir ci-dessous) :
+- Remplacer par zone le "rc + WRITE_BUFFER_CHECKED(ctx, ctx.buffer, data_size)" brut par une
+  boucle en sous-chunks de GECKO_BUFFER_SIZE2 (8KB), identique a _readmem :
+      READ_CHECKED(ctx, addr);
+      u32 remaining = data_size;
+      while (remaining > 0) {
+          u32 len = remaining < GECKO_BUFFER_SIZE2 ? remaining : GECKO_BUFFER_SIZE2;
+          rc = dmnt ? dmntchtReadCheatProcessMemory(addr, ctx.buffer, len)
+                    : ctx.dbg.readMem(ctx.buffer, addr, len);
+          WRITE_CHECKED(ctx, rc);
+          if (R_FAILED(rc)) break;
+          rc = writeCompressed(ctx, len);   // tmp[] = 16KB = 2*8KB, OK pour len <= 8KB
+          if (R_FAILED(rc)) break;
+          addr += len; remaining -= len;
+      }
+      if (R_FAILED(rc)) break;  // arrete les zones suivantes
+- Le client sait finir une zone via data_size (somme des len decompresses).
+- En cas d'echec mid-zone : le serveur break les 2 boucles, le dispatcher ecrit le rc trailing
+  final -> le client doit lire ce trailing avant de throw (cf fix desync 0x13).
+- Bumper VER_PATCH (gecko.h, ex 157 -> 158) pour signaler le support.
+
+COTE CLIENT (core/Debugger.java + EDebCommand.java) :
+- Ajouter COMMAND_READ_MULTI_COMPRESSED(0x32) dans EDebCommand (plage 0x30+ = extensions).
+- readmemMultiCompressedToStream(...) : meme entree que readmemMultiToStream mais envoie 0x32 ;
+  si le serveur repond invalid_cmd (vieux sysmodule), fallback sur 0x13 brut.
+- protocolVersion = (major<<16)|(minor<<8)|patch (ligne ~90). Ajouter constante ex
+  MULTI_COMPRESSED_PATCH = 158 et booleen multiCompressed = protocolVersion >= (0x10100|158).
+  Attention CURRENT_PROTOCOL_VERSION : si le serveur depasse la version client, connexion refusee
+  -> bumper aussi la constante client si besoin.
+- readmemMultiToStream / readmemMulti : si multiCompressed, par zone :
+      int received = 0;
+      while (received < z.dataSize()) {
+          rc = conn.readResult();
+          if (rc.failed()) { conn.readResult(); /* trailing */ throw new ConnectionException(rc); }
+          int len = readCompressed(buf);   // buf >= max(dataSize, 8KB)
+          out.write(buf, 0, len); received += len; total += len;
+      }
+  sinon garder le readFully brut actuel (rétrocompat vieux sysmodule).
+- readCompressed existe deja (ligne ~707) : flag(1B) + decompressedLen(4B) + [raw | compressedLen(4B)+RLE].
+
+DEPLOIEMENT : il faut rebuilder/reinstaller le sysmodule noexs sur la Switch pour que ca prenne effet.
+
+=== Lister les adresses freezees (dmntcht) — IMPLEMENTE (commandes 0x30/0x31, serveur 1.1.158) ===
+IMPLEMENTE : serveur _get_frozen_addresses (0x30, pagine via dmntchtGetFrozenAddresses,
+max = GECKO_BUFFER_SIZE/sizeof(DmntFrozenAddressEntry), entries {addr u64, value u64, width u8},
+garde-fou out_count==0) et _disable_frozen_address (0x31, dmntchtDisableFrozenAddress).
+Client : Debugger.getFrozenAddresses() -> List<FrozenAddress(address,value,width)> et
+Debugger.unfreezeAddress(addr). Enums : Commands + EDebCommand (0x30/0x31/0x32).
+Reste a faire : UI — afficher la liste dans l'onglet Tools/Cheats.
+
+PLAN ORIGINAL (conserve) :
+La lib dmntcht expose deja (include/dmntcht.h) :
+  - dmntchtGetFrozenAddressCount(u64 *out_count)
+  - dmntchtGetFrozenAddresses(DmntFrozenAddressEntry *buffer, u64 max_count, u64 offset, u64 *out_count)
+  - dmntchtGetFrozenAddress(DmntFrozenAddressEntry *out, u64 address)
+  - dmntchtDisableFrozenAddress(u64 address)
+  avec DmntFrozenAddressEntry { u64 address; DmntFrozenAddressValue value; }
+       DmntFrozenAddressValue { u64 value; u8 width; }
+Mais aucune commande protocole ne les wrappe (0x15 freeze ne fait qu'activer + retourne la valeur).
+
+A IMPLEMENTER :
+- Serveur (commands.cpp) : nouvelle commande 0x30 GET_FROZEN_ADDRESSES :
+    WRITE count (u64) puis pour chaque entree WRITE address(8) + value(8) + width(1),
+    paginee (max_count/offset) ou en un bloc. Optionnel 0x31 DISABLE_FROZEN_ADDRESS(addr).
+- Client : EDebCommand.COMMAND_GET_FROZEN_ADDRESSES(0x30, ...), record RDebFrozenAddressEntry,
+  Debugger.getFrozenAddresses() -> List<FrozenAddress(addr, value, width)>, et eventuellement
+  Debugger.unfreezeAddress(addr) (0x31).
+- UI : les afficher dans l'onglet Tools/Cheats (liste des valeurs freezees en cours).
+
+=== Commandes manquantes possibles (plage 0x30+ extensions JNoexs) ===
+Deja fait : 0x30 GetFrozenAddresses, 0x31 DisableFrozenAddress, 0x32 ReadMemMultiCompressed,
+0x33 LOG_MESSAGE (log client -> serveur, serveur 1.1.160).
+
+A prevoir, par priorite (numérotation décalée : 0x33 pris par LOG_MESSAGE) :
+
+1) COTE CLIENT UNIQUEMENT (handlers serveur existent deja, juste a wrapper) :
+   - 0x16 SearchLocal + 0x17 FetchResult : recherche DANS la Switch, evite le dump de 3 Go.
+     Gros gain de temps pour la recherche de valeurs. Protocole flux LZ comme getBookmark.
+     (0x16 FAIT en mode local ; 0x17 _fetch_result est un copier-coller cassé côté serveur)
+   - 0x19 DumpPtr et 0x1E ResolvePointers deja wrappes mais pas encore testes/brancher UI.
+
+2) CHEATS DMNT (dmntcht.h) — tout est dispo mais non expose :
+   - 0x34 GetCheats : dmntchtGetCheatCount + dmntchtGetCheats (liste id/enabled/nom/opcodes)
+   - 0x35 ToggleCheat(id) : dmntchtToggleCheat
+   - 0x36 AddCheat(definition) / 0x37 RemoveCheat(id) : dmntchtAddCheat / RemoveCheat
+   - 0x38 GetCheatProcessMetadata : title_id, build_id, extents main/heap/alias/addr-space
+     (utile comme base pour la recherche de pointeurs)
+   - 0x39 ReadStaticRegister(which) / 0x3A WriteStaticRegister(which,val) / 0x3B ResetStaticRegisters
+     (registres R0-R15 du moteur de cheats, utilises par les opcodes)
+   - 0x3C GetCheatProcessMappings (map memoire paginee via DMNT, comme query multi)
+
+3) DEBUG AVANCE (debug.h) :
+   - 0x3D GetDebugEvent / 0x3E ContinueDebugEvent : remonter les evenements (breakpoint,
+     exception, thread create/exit) au client -> vrai debugger (step, break, crash dump)
+   - 0x3F GetThreads + GetThreadContext : liste des threads et registres (svcGetDebugThreadContext
+     a wrapper serveur-side, pas encore dans debug.h)
+
+4) TRANSFERT :
+   - 0x40 WriteMemMulti : batch de pokes (equivalent multi du 0x07 writemem) pour appliquer
+     un cheat entier en un round-trip
+
+Priorite recommandee : 0x16/0x17 (search local), puis 0x34-0x38 (cheats), puis 0x3D-0x3F (debug avance).
+
+=== Reference upstream DMNT (Atmosphere libstratosphere) ===
+- Diff dmntcht.h upstream vs vendored : il manque UNIQUEMENT dmntchtSetMasterCheat (a copier).
+- VM cheats : stratosphere/dmnt/source/cheat/impl/dmnt_cheat_vm.hpp, opcodes 32 bits :
+  0x0 StoreStatic, 0x1/0x2 ConditionalBlock, 0x3 Loop, 0x4/0x5 LoadRegister(Static/Memory),
+  0x6 StoreStaticToAddress, 0x7 ArithmeticStatic, 0x8 KeypressConditional, 0x9/0xA Arithmetic/Store
+  Register, 0xC ExtendedWidth, 0xC0-0xC3 RegisterConditional/SaveRestoreRegister(+Mask)/ReadWriteStatic,
+  + PauseProcess/ResumeProcess/DebugLog.
+- Nouvelle commande possible 0x41 SET_MASTER_CHEAT (dmntchtSetMasterCheat) et 0x36 AddCheat
+  permettraient d'envoyer des cheats construits en Java (CheatCodeMaker) sans fichier .cht sur SD.
+
+=== Reference code types (cheatslips.com/wiki/code_types) ===
+Code types textuels Gateway = representation des opcodes VM Atmosphere (dmnt_cheat_vm.hpp) :
+0x0 store static, 0x1/0x2 if/endif, 0x3 loop, 0x4/0x5 load reg (static/mem), 0x6 store static->[R],
+0x7 arith legacy, 0x8 keypress cond, 0x9 arith registres, 0xA store reg->[R], 0xC0-C3 etendus.
+Format bloc 8 hex : 0TMR00AA AAAAAAAA VVVVVVVV(VVVVVVVV) — T=taille octets, M=region (0 MAIN,1 HEAP,
+2 ALIAS,3 ASLR), R=registre 0-F, AA=offset, V=valeur. SXOS = types basiques seuls ; Atmosphere = tous.
+=> CheatCodeMaker (Java) peut generer ces codes, envoyables via 0x36 AddCheat / 0x41 SetMasterCheat.
+
+=== Reference encodages cheats Atmosphere (docs/features/cheats.md) ===
+Regions M : 0=Main NSO, 1=Heap, 2=Alias, 3=Aslr, 4=non-relative. Width T : 1/2/4/8 octets.
+Conditions C (0x1, 0xC0) : 1 >, 2 >=, 3 <, 4 <=, 5 ==, 6 !=.
+Operand types X : 0=mem base+offset, 1=mem base+reg offset, 2=reg+offset, 3=reg+reg, 4=valeur statique, 5=autre registre.
+- 0x0 store static : 0TMR00AA AAAAAAAA VVVVVVVV (V64 optionnel)
+- 0x1 begin cond  : 1TMCXrAA AAAAAAAA VVVVVVVV ; 0x2 end/else : 2X000000 (X: 0=end, 1=else)
+- 0x3 loop        : start 300R0000 VVVVVVVV (V=iterations), end 310R0000
+- 0x4 load reg static : 400R0000 VVVVVVVV VVVVVVVV
+- 0x5 load reg mem    : 5TMR00AA AAAAAAAA (fixed) / 5T0R10AA AAAAAAAA (reg base) / 5T0R2SAA.. / 5TMR3SAA..
+- 0x6 store static ->[R] : 6T0RIor0 VVVVVVVV VVVVVVVV (I=increment R de T, o=offset reg r)
+- 0x7 arith legacy (deprecated) : 7T0RC000 VVVVVVVV (0=+,1=-,2=*,3=<<,4=>>)
+- 0x8 keypress cond : 8kkkkkkk (masque hidKeysDown, A=1,B=2,X=4,Y=8,L=40,R=80,ZL=100,ZR=200,Plus=400,Minus=800,dir...,SL=1000000,SR=2000000)
+- 0x9 arith reg   : 9TCRS0s0 (reg op reg) ou 9TCRS100 VVVVVVVV (reg op valeur) ; ops 0-4 arith, 5 AND, 6 OR, 7 NOT, 8 XOR, 9 move, 10-13 float +,-,*,/ (T=4 single, T=8 double)
+- 0xA store reg -> mem : ATSRIOxa (aaaaaaaa) ; offset O: 0 aucun, 1 reg offset x, 2 offset fixe a, 3 region+reg base, 4 region+addr, 5 region+addr+reg
+- 0xB reserve ; 0xC-0xF extended width (2 nybbles) ; 0xF0 double extended (3 nybbles)
+- 0xC0 begin cond register : C0TcSX## + operande (voir doc)
+- 0xC1 save/restore reg : C10D0Sx0 (x: 0 restore, 1 save, 2 clear saved, 3 clear reg)
+- 0xC2 save/restore mask : C2x0XXXX (X = masque 16 bits)
+- 0xC3 read/write static reg : C3000XXx (XX<0x80 read, >=0x80 write ; x = registre)
+- 0xC4 keypress etendu : C4r00000 kkkkkkkk kkkkkkkk (r=auto-repeat 0/1)
+- 0xFF0 pause process, 0xFF1 resume, 0xFFF debug log vers /atmosphere/cheat_vm_logs/
+Chargement cheats par Atmosphere : /atmosphere/contents/<titleid>/cheats/<buildid>.txt (buildid = 8 premiers octets hex du build id du main NSO), toggle on par defaut, ForceOpen/ForceCloseCheatProcess via API service.
+
+=== Reference wiki cheatslips.com (index /wiki) ===
+Sections : start, computer_memory, software, searching, searching part 2, cheat_creation,
+code_types (lu), code_creation, conclusion, contact, interactive ASM cheats updater.
+- Page "software" : la toolchain decrite est EXACTEMENT la notre — JNoExsClient (PC) +
+  NoExs sysmodule (dump RAM) + EdiZon-SE/Breeze (recherche/viewer on-console, expert mode)
+  + PointerSearcher-SE (pointeurs). Un seul client a la fois sur le sysmodule.
+  Modes de recherche EdiZon A-L : ==, >, <, between, unknown/different, ?-/-- decrease,
+  ?+/++ increase, !=, same, PTR. Regions : MAIN / HEAP / RAM(all).
+  => correspond a nos SearchType/ConditionType dans MemorySearchService.
+- Page "cheat_creation" : workflow bookmarks EdiZon (== nos commandes 0x1B/0x1C get/put bookmark)
+  -> drag dans PointerSearcher-SE target addresses ; Max Depth defaut 4, Offset Num/Range ;
+  valeurs voisines en memoire = pointeurs similaires.
+- Page "code_creation" : fichiers cheats par title id + build id
+  (/atmosphere/contents/<titleid>/cheats/<buildid>.txt).
+
+=== Base de cheats locale : E:\Programmation\Workspace\Noexes\cheatdb ===
+Source : https://github.com/HamletDuFromage/switch-cheats-db/releases (a jour).
+Structure : contents/contents/<titleid>/cheats/<buildid>.txt (+ <titre>.txt par jeu) + contents.zip.
+2139 titleids, 4562 fichiers, ~19 Mo. Format = opcodes hex Atmosphere avec sections [Nom du cheat].
+=> parseable directement par OpCodeManager.decodeCheatCode / abstractInstructions (inverse DSL).
+=> utilisable pour : navigateur de cheats dans l'UI (par title id, lu via 0x11 getTitleId),
+   envoi via futures commandes 0x36 AddCheat / 0x41 SetMasterCheat, ou copie vers SD
+   /atmosphere/contents/<titleid>/cheats/<buildid>.txt. buildid obtenu via 0x38 metadata.
+
+=== Assistant de rebase de cheats (mise a jour de jeu, adresses qui changent) ===
+Idee : apres une MAJ du jeu (nouveau build id), les offsets MAIN changent. Assistant pour
+calculer le delta et réécrire les cheats existants automatiquement.
+
+ENTREES :
+- ancien fichier cheat (cheatdb E:\...\cheatdb\contents\<titleid>\cheats\<oldbuildid>.txt ou user)
+- ancien dump .dmp de l'ancienne version (pour extraire les signatures) OU signature fournie
+  par l'utilisateur (pattern trouve dans les 2 versions)
+- nouveau dump de la session courante (deja produit par MemorySearchService) + buildid courant
+  (0x11 titleid + 0x38 metadata pour le build id)
+
+ETAPES :
+1. Parser le cheat : OpCodeManager.splitLines/decodeCheatCode -> List<AOpCode>.
+   Identifier les opcodes portant une adresse MAIN : 0x0 (store static), 0x5 (load fixed),
+   0x1 (cond), 0xA (store, offset type 3/4/5). Les pointeurs en chaine (0x5 depuis registre)
+   sont relatifs -> pas besoin de rebase. Region 4 (non-relative, adresse absolue) -> flag
+   "non rebasable sans risque". HEAP : offset relatif base heap, a traiter séparément si besoin.
+2. Pour chaque offset cible old : lire une fenetre de contexte (32-64 octets autour de
+   main_base+offset) dans l'ancien dump (MemoryDump + DumpIndex) => signature.
+3. Chercher la signature dans le dump courant, région MAIN uniquement. PATTERN SEARCH EN JAVA
+   PURE sur les DumpIndex (pas besoin de la Switch) : a implementer dans le search service
+   (SearchType n'a pas encore PATTERN : ajouter SearchType.PATTERN ou classe dediee).
+4. delta = (found_addr - new_main_base) - old_offset. Prendre la MEDIANE des deltas (robuste
+   aux outliers) ; signaler les cibles avec delta aberrant.
+5. Re-ecrire chaque adresse (old + delta) dans les AOpCode, re-encoder via
+   OpCodeManager.encodeCheatCode -> nouveau fichier <newbuildid>.txt dans cheatdb,
+   ou envoi direct via 0x36 AddCheat / 0x41 SetMasterCheat.
+6. Validation optionnelle : lire la valeur a la nouvelle adresse et verifier qu'elle est
+   plausible (type/plage attendue).
+
+CAS SIMPLE : si cheatdb contient deja <newbuildid>.txt -> l'utiliser directement, pas de rebase.
+
+UI prevue : assistant wizard "Update cheats" : choisir jeu (titleid courant) -> liste les
+buildids dispos dans cheatdb -> si buildid courant absent, lancer le rebase -> rapport
+(delta, nb cheats ok, cheats en warning) -> enregistrer/envoyer.
+
+=== Rebase INTERACTIF (complement) : demander la valeur affichée a l'ecran, cheat par cheat ===
+Pour chaque cheat de l'ancien fichier (dans l'ordre), le wizard demande a l'utilisateur :
+  "Valeur actuellement affichee a l'ecran pour [<nom du cheat>] ?"
+Puis : recherche de cette valeur (SearchType.KNOWN) dans le dump courant, de preference dans
+une fenetre autour de l'ancienne adresse (old_addr +/- ex 0x10000) ou dans la region MAIN/HEAP
+selon le cheat. Si plusieurs candidats :
+  - prendre le plus proche de old_addr + delta median des cheats deja rebasés ;
+  - sinon lister les candidats avec contexte (valeurs voisines) et laisser l'utilisateur choisir.
+Si aucun candidat : demander une 2e valeur ou un pattern (signature) pour ce cheat.
+Avantage : ne necessite PAS l'ancien dump (l'assistant marche juste avec l'ancien .txt +
+le dump courant). C'est la methode la plus fiable quand les offsets MAIN ont glisse.
+=> combine avec le mode signature : delta calcule par signatures d'abord, puis verification
+   par valeurs affichees cheat par cheat (successif), avec skip possible.
+
+=== Reference EdiZon-SE (gamebrew.org/wiki/EdiZon_SE_Switch, source github.com/tomvita/EdiZon-SE) ===
+Features qui confirment notre roadmap :
+- "Rebase feature to extract potential pointer chain from dmnt cheat code made for previous
+  version of the game" => notre assistant de rebase ; EdiZon convertit les adresses statiques
+  MAIN en chaines de pointeurs quand possible. A cloner pour reference : tomvita/EdiZon-SE.
+- Bookmark adjust auto quand main/heap start change au relancement ; bookmarks avec pointer
+  chain se mettent a jour dynamiquement => nos 0x1B/0x1C + resolvePointers 0x1E couvrent ca.
+- "Extract memory address from dmnt cheat code and add to bookmark" => decode cheat
+  (OpCodeManager) + putBookmark 0x1C.
+- "Create dmnt cheat code from pointer chain found" => CheatCodeMaker (DSL -> 0x5/0x6/0x7).
+- Range search, unknown search, compare previous, multi-target search => nos SearchType
+  actuels + extensions prevues.
+- "Export dump to PC app (forked PointerSearcher)" => exactement notre dump JNoexs -> .dmp.
+
+=== Wiki EdiZon-SE (github.com/tomvita/EdiZon-SE/wiki) — workflows de reference ===
+1. Pointer chain search on-console : search type "pointer" (ZL+X), bookmark cible, Lstick
+   lance, params MaxDepth / OffsetNum / OffsetRange (LZ+Y), resultats ajoutes aux bookmarks,
+   Y = ajouter au fichier cheat. Pause ZL+B, abort ZL+"+".
+2. Export dump PC : "(buildID).dmp(x)" -> PointerSearcher-SE sur PC -> "(buildID).bmk" ->
+   reimport dans EdiZon (LZ+"+"). == NOTRE flow JNoexs : dump .dmp + bookmarks 0x1B/0x1C.
+3. Creer cheat dmnt depuis bookmark : Y ajoute au "(buildID).txt" (AMS contents + edizon dir).
+4. REBASE (cle) : ajouter l'ancien code au .txt, le selectionner, "+" -> bookmark, confirmer
+   rebase => les pointer chains dont SEUL LE PREMIER OFFSET est ajuste et qui resolvent vers une
+   adresse valide sont ajoutees aux bookmarks ; tester, puis Y reecrit le code ajuste.
+   => notre wizard : ajuster le premier offset de la chaine (pas tous les offsets).
+   La valeur ecrite par le code rebase = valeur courante a la cible.
+5. Unknown search : 1ere recherche SAME/DIFF/++/-- ou range A..B (full dump), puis affiner.
+   Note !=,>,< ne sauvegardent pas la valeur (retour etape 2).
+6. Floats : valeur affichee = arrondie ; 0.3 = 0x3E99999A app vs 0x3E999998 jeu ; latence
+   affichage/search => si == echoue, utiliser range A..B. (utile pour le wizard interactif)
+7. Detach dmnt : ForceCloseCheatProcess (custom dmnt tomvita) ; LZ+B toggle => notre 0x18.
+
+=== Forum GBATemp "Tomvita's tools" (gbatemp.net/forums/tomvitas-tools.328) ===
+Ecosysteme : EdiZon SE, Breeze (beta), PointerSearcher SE (PC, marche avec Noexes + Jnoexs),
+Noexes sysmodule (notre serveur), Zing (overlay tesla).
+Threads utiles pour nous :
+- "How to do easy rebase with edizon se" + "Easy code update methods" => reference pour notre
+  wizard de rebase/update de cheats apres MAJ.
+- "What is BID and why is it important to have matching BID" => build id = cle des fichiers cheat.
+- "Adding a freeze/unfreeze code" => freeze/unfreeze (0x15 + 0x30/0x31 prevus).
+- "From hacking one item to hacking a sequential list with loop code" => code type 0x3 loop.
+- "A short excursion into ASM with EdiZon SE and GDB" / "Easy ASM hacking" => ASM cheats.
+- "Request for Noexes Server v1.1.159 Source Code" (sept 2026) => un serveur noexs plus recent
+  que notre VER_PATCH=157 existe peut-etre en release ; a verifier s'il a de nouvelles commandes.
+
+=== Horodatage faux dans GeckoLog.txt (sysmodule) — A CORRIGER ===
+Cause 1 (code) : macro printf de server/.../include/gecko.h — timeGetCurrentTime renvoie
+  un PosixTime en NANOSECONDES mais le code le caste en time_t (secondes) -> dates
+  délirantes (ex: 341360197-04-23). Corriger : currentTime / 1000000000ULL avant localtime.
+Cause 2 (config) : TimeType_UserSystemClock = 0 si l'heure de la Switch jamais reglee
+  (Parametres > Systeme > Date et heure, synchro Internet ou manuel) -> lignes 1970-01-01.
+  Correctif code : essayer TimeType_NetworkSystemClock d'abord, fallback UserSystemClock,
+  si 0 afficher uptime via svcGetSystemTick()/19200 (tick 19.2 MHz). Supprimer le code
+  mort gettimeofday/timebuffer. main.cpp:198 (ligne >>[...]) a le meme souci via time(NULL).
+Correctif console (necessaire mais pas suffisant) : regler l'heure dans les parametres.
+Puis rebuilder/reinstaller le sysmodule. Optionnel : ajouter " UTC" dans le format strftime.
+
+=== Mode lecture memoire selectionnable dans l'UI — FAIT ===
+SearchTab.fxml : ComboBox readModeDropdown "Mode lecture mémoire" sous les options de recherche,
+alignée sur la colonne Equals (x=21), en dessous de Convert to Hex. 3 choix (ui/models/ReadMode) :
+  single (comp)  = 0x06 chunks 8KB RLE          (défaut)
+  multi (uncomp) = 0x13 brut                     (readmemMultiToStreamRaw)
+  multi (comp)   = 0x32 RLE, repli 0x13 si serveur < 1.1.158
+SearchController.initSearch -> searchService.setReadMode(...). MemorySearchService : USE_MULTI_READ
+remplacé par le champ readMode (défaut SINGLE_COMP). Permet de comparer single/multi SANS détacher
+(pause -> dump single -> dump multi au même stade).
+
+=== Analyse essais single vs multi (log 23:04-23:08, AVEC reset) ===
+A 23:04 single(comp) : Real Read 973402112, 73s, 12.72 Mio/s, 175 resultats
+B 23:05 multi(comp)  : Real Read 973402112, 182s, 5.10 Mio/s, 175 resultats
+=> octets lus IDENTIQUES et resultats IDENTIQUES entre single et multi au meme stade
+   (fix troncature multi valide). multi ~2.5x plus lent que single. Nb Region differe
+   (146 vs 568) = granularite de l'index du dump, pas une difference de donnees.
+Essais sans reset (22:51/22:56) : re-search sur "Region list (73)" => 174 resultats,
+c'est pour ca qu'il fallait le reset (Clear search) avant chaque essai.
+Bug trouve et corrige : MemoryDump.close() appele 2x (fin de dump puis Clear search)
+=> IOException Stream Closed. Guard "closed" ajoute.
+
+=== Bug patch signé : multi partait en fallback 0x13 malgré serveur 158 ===
+RDebStatusOutput.patch est un byte SIGNÉ : 158 = -98. getStatus faisait protocolVersion |= patch
+=> protocolVersion négatif => isJnoexsExtSupported() faux => fallback 0x13 (log:
+"mode:multi(uncomp, fallback 0x13)" sur le dump 23:05). Corrigé : & 0xFF sur status/major/minor/patch
+dans Debugger.getStatus(). A rebuilder (shade) et redéployer côté client.
+
+=== Logger asynchrone — RESOLU (plus d'erreur au démarrage) ===
+Cause : <AsyncLogger> sans attribut name dans resources/log4j2.xml (loggerName=null ->
+ConfigurationException). Fix : bloc supprimé, <Root> conservé, et
+log4j2.contextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector ajouté
+dans resources/log4j2.component.properties (rend TOUS les loggers async, ring buffer 4M,
+WaitStrategy=Sleep). Preuve : logger class = AsyncLogger en smoke test, aucun ERROR au boot.
+
+=== Multi batch: rendre le batch avantageux sur les PETITES zones — A FAIRE ===
+Actuellement seules les zones de 32 Ko pleines (frag == BATCH_FRAGMENT) sont batchées ;
+les zones < 32 Ko passent en 0x06 zone par zone (branche "fragment partiel") => le multi
+n'apporte RIEN sur les petites zones (preuve log: re-search Region list 73 zones = 4 s
+en single comme en multi, 1 170 068 octets). Potentiel: 73 zones = 73 round-trips (~27 ms
+RTT WiFi chacun) en single vs 2 batches de 64 zones en multi.
+A faire : grouper les zones de MEME taille < 32 Ko dans un batch (data_size uniforme requis
+par 0x13/0x32), et batcher à travers les régions (la liste batch est par région aujourd'hui).
+
+=== Multi batch sur petites zones — FAIT ===
+MemorySearchService : batches partagés entre régions, groupés par taille de fragment
+(Map<Integer,List<ZoneToDump>>) — le protocole 0x13/0x32 exige un data_size uniforme par batch,
+donc les petites zones (< 32 Ko) sont désormais batchées aussi (avec les zones de même taille),
+et plus seulement les fragments pleins de 32 Ko. flushBatch pose l'adresse du dump PAR ZONE
+(ZoneAddressOut) car les zones d'un batch peuvent être non contiguës. Seuil MULTI_MIN_REGION_SIZE
+supprimé (useMulti = readMode.isMulti()). A tester : re-search Region list 73 zones en multi(comp)
+doit passer de 73 round-trips à ~2 batches.
+
+=== Calcul taille a lire (progression/ETA) — AMELIORE ===
+Avant : totalSize = supplier.getSize() = end-start de la plage (trous non mappés inclus) et les
+régions non lisibles étaient ajoutées à read => progression faussée, "Force 100%" truqué.
+Apres : DumpRegionSupplier.createSupplierFromRange.getRealSize() = somme des tailles des régions
+LISIBLES clippées à [start,end] (1 seule query, mise en cache pour get()). createDump utilise
+getRealSize() pour totalSize ET le check d'espace disque ; les régions non lisibles ne comptent
+plus dans read (seulement dans unreadTotalSize, loggé dans "Dump finished").
+
+=== Multi réservé aux petites zones (<= 32 Ko), lues en batch — FAIT ===
+useMulti = readMode.isMulti() && size <= BATCH_FRAGMENT (32 Ko). Les petites zones de même
+taille sont batchées ENSEMBLE à travers les régions (Map<taille, batch>, flush à 64 zones) :
+1 round-trip pour 64 zones au lieu de 64 commandes 0x06. Grosses régions (> 32 Ko) restent en
+single 0x06 (streaming continu, mesuré plus rapide : 13,3 Mio/s vs 11,2 en tout-multi).
+
+=== Batches multi triés par taille décroissante — FAIT ===
+Map<Integer,List<ZoneToDump>> batches = TreeMap à clés décroissantes (Integer.compare(b,a)) :
+au flushAllBatches, les batches des plus grosses zones sont vidés en premier. Aucun impact
+sur la correction (adressage par zone), seulement l'ordre d'écriture/progression.
+
+=== Mode local (0x16 COMMAND_SEARCH_LOCAL) — FAIT ===
+ReadMode.LOCAL("local (0x16)") ajouté à la liste déroulante "Mode lecture mémoire".
+Quand sélectionné : pas de dump, la recherche est faite côté Switch via 0x16
+(Debugger.searchLocal : input start/end/value1/value2/searchSize/searchType, flux LZ de
+paires (from,to), cont=1 entre chunks, count=0 puis trailing rc). Restriction : KNOWN+EQUALS
+seulement (serveur ne fait que EQ/RANGE). SearchResult : guards curr==null (getCurr -> 0,
+save -> memoryDumpSize 0). Le tri des régions par taille décroissante est aussi en place
+(drain du supplier + sort avant la boucle de dump).
+A noter : 0x17 _fetch_result côté serveur est un copier-coller cassé de setBreakpoint
+(hérité d'upstream) — ne pas l'utiliser.
+
+=== Fix 0x16 search local (adresses -4 / double-match) — APPLIQUÉ serveur, VER_PATCH 159 ===
+Cause : boucle "for (i=0; i<len; i+=8)" + from=addr+i => match en i+4 reporté en i (-4),
+et 2 matchs dans un même mot de 8 o collapsés en 1 paire. Constaté : local=172 vs dump=175,
+141/172 adresses décalées de -4. Fix processlocal : pas = 1<<searchsize, test par position,
+from=addr+i exact, to=valeur lue. A rebuilder/reinstaller le sysmodule (1.1.159) puis
+retester : local doit rendre 175 adresses identiques au dump.
+
+=== Commande 0x33 LOG_MESSAGE (client -> serveur) — FAIT, serveur VER_PATCH 160 ===
+Serveur : _log_message (commands.cpp, cmds[0x33]) lit len(u32)+octets (cap 2048) et printf
+"CLIENT LOG: ..." dans GeckoLog.txt. Client : Commands/EDebCommand 0x33,
+Debugger.sendLogMessage() gate sur PROTOCOL_VERSION_LOG_MESSAGE=0x101A0 (1.1.160),
+appelé dans MainController.onConnect avec date + version client + version protocole.
+But : corréler app.log et GeckoLog.txt pour debugger les pertes de connexion
+(vues à 01:01 : Exit network loop côté Switch, 15 restarts du gateway).
+
+=== Commandes 0x30-0x33 converties en mode RECORD (serveur VER_PATCH 161) — FAIT ===
+Principe (convention "record" comme COMMAND_STATUS/ATTACH/FREEZE) : le handler serveur n'ecrit
+QUE les champs du record de sortie et retourne le rc (ecrit en trailing par le dispatcher) ;
+le client fait DebuggerUtils.runCommand (writeRecord entree + readRecord sortie) puis lit un
+seul readResult. DebuggerUtils supporte maintenant les tableaux en write/read (int length +
+elements, recursif pour les tableaux de records).
+- 0x30 : sortie RDebGetFrozenAddressesOutput(RDebFrozenAddressEntry[] entries) — serveur ecrit
+  count en u32 (0 si echec) + entrees intercalees {addr u64, value u64, width u8}, plus de rc
+  intermediaire. Client : getFrozenAddresses() record si >= 0x101A1, manuel (rc+count u64) sinon.
+- 0x31 : entree RDebDisableFrozenAddressInput(long address), plus de rc intermediaire serveur.
+  Client : unfreezeAddress() record si >= 0x101A1, manuel sinon.
+- 0x32 : entree RDebReadMultiCompressedInput(int dataSize, long[] addresses) — le serveur lit
+  data_size(u32) puis size(u32) puis les adresses (ordre record). La sortie reste un flux manuel
+  (rc + sous-chunks RLE). Client : readmemMultiCompressedToStream choisit record vs manuel selon
+  PROTOCOL_VERSION_RECORD_EXT=0x101A1.
+- 0x33 : entree RDebLogMessageInput(String message) — sérialisée par EDebDataType.STRING en
+  int len + octets UTF-8, RIEN ne change cote serveur (deja compatible record depuis 1.1.160),
+  gate reste 0x101A0. Le cap 2048 octets reste appliqué côté client (le serveur ne lit que 2048 octets).
+Client : PROTOCOL_VERSION_RECORD_EXT=0x101A1 + isRecordExtSupported(). Test : TestRecordSerde (5 tests,
+round-trip write/read des records, little-endian, borne anti-desync). Serveur : VER_PATCH 161.
+A rebuilder/reinstaller le sysmodule 1.1.161 pour le format record de 0x30/0x31/0x32.
+REGLE : le mecanisme record ne sert QUE pour des structures de taille raisonnable en SORTIE.
+readRecord borne tout tableau lu a MAX_RECORD_ARRAY_LENGTH=1_000_000 (exception AVANT allocation,
+sinon OOM sur count corrompu en cas de desync). Les gros volumes (readMem 0x06/0x13/0x32) restent
+en flux manuel — seule l'ENTREE de 0x32 est un record, bornee par le client (batch 64 zones max).

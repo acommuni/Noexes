@@ -861,15 +861,17 @@ static Result _resolvepointers(Gecko::Context &ctx) {
 }
 
 //0x30 — Liste paginée des adresses freezées (nécessite DMNT attaché, commande 0x1A).
-//Protocole : rc(u32), si OK count(u64), puis count entrées {address(u64), value(u64), width(u8)}.
+//Protocole record (serveur >= 1.1.161) : count(u32) toujours écrit (0 si échec),
+//puis count entrées {address(u64), value(u64), width(u8)}. Le rc d'erreur n'est écrit
+//que par le dispatcher (trailing) — convention identique à _status.
 static Result _get_frozen_addresses(Gecko::Context& ctx){
     Result rc = 0;
     u64 count = 0;
     if (!dmnt) rc = MAKERESULT(Module_TCPGecko, TCPGeckoError_not_attached);
     else rc = dmntchtGetFrozenAddressCount(&count);
-    WRITE_CHECKED(ctx, rc);
+    if (R_FAILED(rc)) count = 0;
+    WRITE_CHECKED(ctx, (u32)count); // u32 : compatible tableau record côté client (readInt)
     if(R_SUCCEEDED(rc)){
-        WRITE_CHECKED(ctx, count);
         DmntFrozenAddressEntry* entries = reinterpret_cast<DmntFrozenAddressEntry*>(ctx.buffer);
         u64 max_count = GECKO_BUFFER_SIZE / sizeof(DmntFrozenAddressEntry);
         u64 offset = 0;
@@ -894,30 +896,30 @@ static Result _get_frozen_addresses(Gecko::Context& ctx){
 }
 
 //0x31 — Supprime le freeze d'une adresse (nécessite DMNT attaché).
-//Protocole : address(u64) en entrée, rc(u32) en sortie.
+//Protocole record (serveur >= 1.1.161) : address(u64) en entrée, rien en sortie,
+//le rc (succès ou erreur) n'est écrit que par le dispatcher (trailing).
 static Result _disable_frozen_address(Gecko::Context& ctx){
     u64 addr;
     READ_CHECKED(ctx, addr);
-    Result rc;
-    if (!dmnt) rc = MAKERESULT(Module_TCPGecko, TCPGeckoError_not_attached);
-    else rc = dmntchtDisableFrozenAddress(addr);
-    WRITE_CHECKED(ctx, rc);
-    return rc;
+    if (!dmnt) return MAKERESULT(Module_TCPGecko, TCPGeckoError_not_attached);
+    return dmntchtDisableFrozenAddress(addr);
 }
 
 //0x32 — Variante compressée (RLE) de _readmem_multi : chaque zone est lue par sous-chunks
 //de GECKO_BUFFER_SIZE2 max, et chaque sous-chunk est envoyé via writeCompressed
 //(flag u8, len u32, puis raw ou RLE). En cas d'échec de lecture d'une zone, on écrit le rc
 //d'échec et on arrête tout (le client bascule en relecture zone par zone).
+//Entrée record (serveur >= 1.1.161) : data_size(u32) puis size(u32, = longueur du tableau)
+//puis size adresses u64 — ordre produit par RDebReadMultiCompressedInput(dataSize, addresses).
 static Result _readmem_multi_compressed(Gecko::Context& ctx){
     Result rc = 0;
-    u32 size;
     u32 data_size;
+    u32 size;
     u32 count = 0;
     u64 addr;
     bool* out = nullptr;
-    READ_CHECKED(ctx, size);
     READ_CHECKED(ctx, data_size);
+    READ_CHECKED(ctx, size);
     if (dmnt) rc = dmntchtHasCheatProcess(out);
     else rc = ctx.dbg.attached();
     WRITE_CHECKED(ctx, rc);
@@ -948,6 +950,23 @@ static Result _readmem_multi_compressed(Gecko::Context& ctx){
     return rc;
 }
 
+//0x33 — Message de log envoyé par le client : affiché dans GeckoLog.txt avec horodatage.
+//Protocole : len(u32) + len octets UTF-8 en entrée, rien en sortie (le dispatcher écrit le trailing rc).
+static Result _log_message(Gecko::Context& ctx){
+    u32 len;
+    READ_CHECKED(ctx, len);
+    if (len > 2048) len = 2048; // borne de sécurité
+    char msg[2049];
+    if (len > 0) {
+        READ_BUFFER_CHECKED(ctx, msg, len);
+    }
+    msg[len] = 0;
+    // %.2034s : "CLIENT LOG: " (12) + 2034 + "\n" (1) = 2047 <= buffer snprintf de la macro printf (2048),
+    // sinon -Wformat-truncation (msg peut faire 2048 octets)
+    printf("CLIENT LOG: %.2034s\n", msg);
+    return 0;
+}
+
 Result cmd_decode(Gecko::Context& ctx, int cmd){
     static Result (*cmds[287])(Gecko::Context &) = {NULL, _status, _poke8, _poke16, _poke32, _poke64, _readmem,
                                                     _writemem, _resume, _pause, _attach, _detatch, _querymem_single,
@@ -958,8 +977,9 @@ Result cmd_decode(Gecko::Context& ctx, int cmd){
                                                     // 0x1F..0x2F : réservés (NULL)
                                                     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
                                                     NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                                                    // 0x30..0x32 : extensions JNoexs
-                                                    _get_frozen_addresses, _disable_frozen_address, _readmem_multi_compressed};
+                                                    // 0x30..0x33 : extensions JNoexs
+                                                    _get_frozen_addresses, _disable_frozen_address, _readmem_multi_compressed,
+                                                    _log_message};
     Result rc = 0;
     if(cmds[cmd]){
         rc = cmds[cmd](ctx);

@@ -209,6 +209,15 @@ public class MainController implements NetworkConstants, IController {
         DebuggerStatus status = debugger.getStatus();
         setTitle(status.getStatus());
 
+        // Log côté serveur (commande 0x33, serveur >= 1.1.160) : marqueur de connexion avec date
+        // -> permet de corréler app.log et GeckoLog.txt en cas d'erreur de connexion.
+        try {
+            debugger.sendLogMessage("JNoexs v" + NoexsApplication.APP_VERSION + " connected at "
+                    + java.time.LocalDateTime.now() + " (protocol 0x" + Integer.toHexString(debugger.getProtocolVersion()) + ")");
+        } catch (Exception e) {
+            logger.warn("sendLogMessage failed", e);
+        }
+
         if (autoAttach.isSelected()) {
             logger.info("Auto attach");
             tools().attachToCurrentProcess();

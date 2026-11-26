@@ -23,6 +23,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
+import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
@@ -156,8 +157,13 @@ public class SearchController implements IController {
             pokeValue.setSize(size);
         });
 
-        floatValue.setOnAction(event -> {
-            convertValueToHex(event);
+        // Entrée dans le champ "Value to convert" = même action que le bouton "Convert to Hex"
+        // (filtre KEY_PRESSED + consume : on ne dépend pas du onAction du TextField)
+        floatValue.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.ENTER) {
+                convertValueToHex(new ActionEvent(floatValue, null));
+                event.consume();
+            }
         });
 
         // Tout changement de texte → bouton + valeur hex en rouge (conversion en attente)
