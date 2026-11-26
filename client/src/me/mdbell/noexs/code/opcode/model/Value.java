@@ -33,7 +33,7 @@ public class Value implements ICodeFragmentWithVariableLength {
     }
 
     @Override
-    public String encode(EDataType datatype) {
+    public String encode(EOpCodeDataType datatype) {
         return HexUtils.format(datatype, value, false);
     }
 

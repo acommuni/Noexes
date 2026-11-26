@@ -34,15 +34,15 @@ import me.mdbell.javafx.control.FormattedTableCell;
 import me.mdbell.javafx.control.HexSpinner;
 import me.mdbell.noexs.core.Debugger;
 import me.mdbell.noexs.core.EMemoryRegion;
-import me.mdbell.noexs.core.MemoryType;
+import me.mdbell.noexs.core.EMemoryType;
 import me.mdbell.noexs.dump.DumpRegionSupplier;
-import me.mdbell.noexs.ui.models.ConditionType;
-import me.mdbell.noexs.ui.models.ConversionType;
-import me.mdbell.noexs.ui.models.DataType;
-import me.mdbell.noexs.ui.models.ReadMode;
+import me.mdbell.noexs.ui.models.EConditionType;
+import me.mdbell.noexs.ui.models.EConversionType;
+import me.mdbell.noexs.ui.models.EDataType;
+import me.mdbell.noexs.ui.models.EReadMode;
 import me.mdbell.noexs.ui.models.Range;
-import me.mdbell.noexs.ui.models.RangeType;
-import me.mdbell.noexs.ui.models.SearchType;
+import me.mdbell.noexs.ui.models.ERangeType;
+import me.mdbell.noexs.ui.models.ESearchType;
 import me.mdbell.noexs.ui.models.SearchValueModel;
 import me.mdbell.noexs.ui.services.MemorySearchService;
 import me.mdbell.noexs.ui.services.SearchResult;
@@ -55,18 +55,18 @@ public class SearchController implements IController {
     private MainController mc;
 
     @FXML
-    ComboBox<RangeType> searchType;
+    ComboBox<ERangeType> searchType;
 
     @FXML
-    ComboBox<DataType> dataTypeDropdown;
+    ComboBox<EDataType> dataTypeDropdown;
 
     @FXML
-    ComboBox<SearchType> searchConditionTypeDropdown;
+    ComboBox<ESearchType> searchConditionTypeDropdown;
     @FXML
-    ComboBox<ConditionType> searchConditionDropdown;
+    ComboBox<EConditionType> searchConditionDropdown;
 
     @FXML
-    ComboBox<ReadMode> readModeDropdown;
+    ComboBox<EReadMode> readModeDropdown;
 
     @FXML
     AddressSpinner searchStart;
@@ -90,7 +90,7 @@ public class SearchController implements IController {
     Button convertToHexBtn;
 
     @FXML
-    ChoiceBox<ConversionType> conversionType;
+    ChoiceBox<EConversionType> conversionType;
 
     @FXML
     HexSpinner knownValue;
@@ -139,17 +139,17 @@ public class SearchController implements IController {
 
     @FXML
     public void initialize() {
-        searchType.getItems().addAll(RangeType.values());
+        searchType.getItems().addAll(ERangeType.values());
 
         searchType.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            boolean b = newValue != RangeType.RANGE;
+            boolean b = newValue != ERangeType.RANGE;
             searchStart.setDisable(b);
             searchEnd.setDisable(b);
         });
-        searchType.getSelectionModel().select(RangeType.ALL);
+        searchType.getSelectionModel().select(ERangeType.ALL);
 
-        dataTypeDropdown.getItems().addAll(DataType.values());
-        dataTypeDropdown.getSelectionModel().select(DataType.INT); // Default is 32-bit
+        dataTypeDropdown.getItems().addAll(EDataType.values());
+        dataTypeDropdown.getSelectionModel().select(EDataType.INT); // Default is 32-bit
 
         dataTypeDropdown.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             int size = newValue.getSize() * 2;
@@ -178,25 +178,25 @@ public class SearchController implements IController {
             convertValueToHex(event);
         });
 
-        searchConditionTypeDropdown.getItems().addAll(SearchType.values());
-        searchConditionTypeDropdown.getSelectionModel().select(SearchType.KNOWN); // Default is SPEC Value
+        searchConditionTypeDropdown.getItems().addAll(ESearchType.values());
+        searchConditionTypeDropdown.getSelectionModel().select(ESearchType.KNOWN); // Default is SPEC Value
 
         searchConditionTypeDropdown.getSelectionModel().selectedItemProperty()
                 .addListener((observable, oldValue, newValue) -> {
-                    boolean b = newValue == SearchType.UNKNOWN;
+                    boolean b = newValue == ESearchType.UNKNOWN;
                     knownValue.setDisable(b);
                     searchConditionDropdown.setDisable(b);
                     if (b) {
-                        searchConditionDropdown.setValue(ConditionType.EQUALS);
+                        searchConditionDropdown.setValue(EConditionType.EQUALS);
                     }
                     updateCondition();
                 });
 
-        searchConditionDropdown.getItems().addAll(ConditionType.values());
-        searchConditionDropdown.getSelectionModel().select(ConditionType.EQUALS);
+        searchConditionDropdown.getItems().addAll(EConditionType.values());
+        searchConditionDropdown.getSelectionModel().select(EConditionType.EQUALS);
 
-        readModeDropdown.getItems().addAll(ReadMode.values());
-        readModeDropdown.getSelectionModel().select(ReadMode.SINGLE_COMP); // défaut : single (comp)
+        readModeDropdown.getItems().addAll(EReadMode.values());
+        readModeDropdown.getSelectionModel().select(EReadMode.SINGLE_COMP); // défaut : single (comp)
 
         searchConditionDropdown.getSelectionModel().selectedItemProperty()
                 .addListener((observable, oldValue, newValue) -> updateCondition());
@@ -204,8 +204,8 @@ public class SearchController implements IController {
         knownValue.valueProperty().addListener((observable, oldValue, newValue) -> updateCondition());
         knownValue.getEditor().textProperty().addListener((observable, oldValue, newValue) -> updateCondition());
 
-        conversionType.getItems().addAll(ConversionType.values());
-        conversionType.getSelectionModel().select(ConversionType.U32); // TODO save/store this
+        conversionType.getItems().addAll(EConversionType.values());
+        conversionType.getSelectionModel().select(EConversionType.U32); // TODO save/store this
 
         resultList = FXCollections.observableArrayList();
 
@@ -242,7 +242,7 @@ public class SearchController implements IController {
                 return;
             }
             mc.memory().setViewAddress(m.getAddr());
-            mc.setTab(MainController.Tab.MEMORY_VIEWER);
+            mc.setTab(MainController.ETab.MEMORY_VIEWER);
         });
         MenuItem watchList = new MenuItem("Watch List");
         watchList.setOnAction(event -> {
@@ -253,7 +253,7 @@ public class SearchController implements IController {
             for (SearchValueModel m : ms) {
                 mc.watch().addAddr(m.getAddr());
             }
-            mc.setTab(MainController.Tab.WATCH_LIST);
+            mc.setTab(MainController.ETab.WATCH_LIST);
         });
         MenuItem pointerSearch = new MenuItem("Pointer Search");
         pointerSearch.setOnAction(event -> {
@@ -262,7 +262,7 @@ public class SearchController implements IController {
                 return;
             }
             mc.pointer().addressSpinner.getValueFactory().setValue(m.getAddr());
-            mc.setTab(MainController.Tab.POINTER_SEARCH);
+            mc.setTab(MainController.ETab.POINTER_SEARCH);
         });
 
         MenuItem cheatMaker = new MenuItem("Cheat Maker");
@@ -285,7 +285,7 @@ public class SearchController implements IController {
 
                 mc.cheatMaker().cheatSource.appendText(pointerStr + "\n");
             }
-            mc.setTab(MainController.Tab.CHEATS);
+            mc.setTab(MainController.ETab.CHEATS);
         });
         cm.getItems().addAll(memoryView, watchList, pointerSearch, cheatMaker);
         searchResults.contextMenuProperty().setValue(cm);
@@ -294,8 +294,8 @@ public class SearchController implements IController {
 
     private void updateCondition() {
         String value = knownValue.getValueAsString();
-        SearchType type = searchConditionTypeDropdown.getValue();
-        ConditionType condition = searchConditionDropdown.getValue();
+        ESearchType type = searchConditionTypeDropdown.getValue();
+        EConditionType condition = searchConditionDropdown.getValue();
 
         String currentName = "CURRENT_VALUE";
         String prevName = "PREV_VALUE";
@@ -335,22 +335,22 @@ public class SearchController implements IController {
 
     public void setStart(long start) {
         searchStart.getValueFactory().setValue(start);
-        searchType.setValue(RangeType.RANGE);
+        searchType.setValue(ERangeType.RANGE);
     }
 
     public void setEnd(long end) {
         searchEnd.getValueFactory().setValue(end);
-        searchType.setValue(RangeType.RANGE);
+        searchType.setValue(ERangeType.RANGE);
     }
 
     public void mainsetStart(long start) {
         mainStart.getValueFactory().setValue(start);
-        searchType.setValue(RangeType.RANGE);
+        searchType.setValue(ERangeType.RANGE);
     }
 
     public void mainsetEnd(long end) {
         mainsearchEnd.getValueFactory().setValue(end);
-        searchType.setValue(RangeType.RANGE);
+        searchType.setValue(ERangeType.RANGE);
     }
 
     public void convertToHex(ActionEvent event) {
@@ -393,7 +393,7 @@ public class SearchController implements IController {
         }
         List<SearchValueModel> models = searchResults.getSelectionModel().getSelectedItems();
         long value = pokeValue.getValue();
-        DataType t = dataTypeDropdown.getSelectionModel().getSelectedItem();
+        EDataType t = dataTypeDropdown.getSelectionModel().getSelectedItem();
         Debugger debugger = mc.getDebugger();
         for (int i = 0; i < models.size(); i++) {
             SearchValueModel m = models.get(i);
@@ -430,11 +430,11 @@ public class SearchController implements IController {
             MainController.showMessage("Please wait for your current task to complete!", Alert.AlertType.WARNING);
             return;
         }
-        DataType dataType = dataTypeDropdown.getValue();
+        EDataType dataType = dataTypeDropdown.getValue();
         long known = knownValue.getValue();
 
-        SearchType type = searchConditionTypeDropdown.getValue();
-        ConditionType compareType = searchConditionDropdown.getValue();
+        ESearchType type = searchConditionTypeDropdown.getValue();
+        EConditionType compareType = searchConditionDropdown.getValue();
         searchService.setConnection(mc.getDebugger());
         searchService.setSupplier(getDumpRegionSupplier(mc.getDebugger()));
         searchService.setFileDumpSuffix(fileDumpSuffix.getText());
@@ -446,11 +446,11 @@ public class SearchController implements IController {
             MainController.showMessage("Please wait for your current task to complete!", Alert.AlertType.WARNING);
             return;
         }
-        DataType dataType = dataTypeDropdown.getValue();
+        EDataType dataType = dataTypeDropdown.getValue();
         long known = knownValue.getValue();
 
-        SearchType type = searchConditionTypeDropdown.getValue();
-        ConditionType compareType = searchConditionDropdown.getValue();
+        ESearchType type = searchConditionTypeDropdown.getValue();
+        EConditionType compareType = searchConditionDropdown.getValue();
         searchService.setConnection(mc.getDebugger());
         searchService.setSupplier(getDumpRegionSupplier(mc.getDebugger()));
         searchService.setFileDumpSuffix(fileDumpSuffix.getText());
@@ -538,9 +538,9 @@ public class SearchController implements IController {
             resultList.clear();
             currentPage = 0;
             searchOptions.setDisable(false);
-            if (result.getType() == SearchType.UNKNOWN) {
-                searchConditionTypeDropdown.setValue(SearchType.PREVIOUS);
-                searchConditionDropdown.setValue(ConditionType.NOT_EQUAL);
+            if (result.getType() == ESearchType.UNKNOWN) {
+                searchConditionTypeDropdown.setValue(ESearchType.PREVIOUS);
+                searchConditionDropdown.setValue(EConditionType.NOT_EQUAL);
             }
             updatePageInfo();
         } catch (IOException e) {
@@ -549,7 +549,7 @@ public class SearchController implements IController {
         }
     }
 
-    private void initSearch(SearchType type, ConditionType compareType, DataType dataType, long known) {
+    private void initSearch(ESearchType type, EConditionType compareType, EDataType dataType, long known) {
         searchService.setType(type);
         searchService.setCompareType(compareType);
         searchService.setDataType(dataType);
@@ -563,9 +563,9 @@ public class SearchController implements IController {
             resultList.clear();
             currentPage = 0;
             searchOptions.setDisable(false);
-            if (result.getType() == SearchType.UNKNOWN) {
-                searchConditionTypeDropdown.setValue(SearchType.PREVIOUS);
-                searchConditionDropdown.setValue(ConditionType.NOT_EQUAL);
+            if (result.getType() == ESearchType.UNKNOWN) {
+                searchConditionTypeDropdown.setValue(ESearchType.PREVIOUS);
+                searchConditionDropdown.setValue(EConditionType.NOT_EQUAL);
             }
             updatePageInfo();
         });
@@ -626,7 +626,7 @@ public class SearchController implements IController {
         if (result != null && result.size() > 0) {
             return DumpRegionSupplier.createSupplierFromRange(conn, result.getStart(), result.getEnd());
         }
-        RangeType t = searchType.getValue();
+        ERangeType t = searchType.getValue();
         switch (t) {
             case RANGE:
                 long start = searchStart.getValue();
@@ -655,10 +655,10 @@ public class SearchController implements IController {
                 return DumpRegionSupplier.createSupplierFromInfo(conn, info -> info.isReadable() && info.isWriteable());
             case HEAP:
                 return DumpRegionSupplier.createSupplierFromInfo(conn,
-                        info -> info.isReadable() && info.getType() == MemoryType.HEAP);
+                        info -> info.isReadable() && info.getType() == EMemoryType.HEAP);
             case TLS:
                 return DumpRegionSupplier.createSupplierFromInfo(conn,
-                        info -> info.isReadable() && info.getType() == MemoryType.THREAD_LOCAL);
+                        info -> info.isReadable() && info.getType() == EMemoryType.THREAD_LOCAL);
         }
         return null;
     }

@@ -34,6 +34,12 @@ public class OpCode2EndConditionalBlock extends AOpCode {
         return null;
     }
 
+    @Override
+    public String explain() {
+        return endType == EEndType.END ? "Fin du bloc conditionnel"
+                : "Sinon (ELSE) : début du bloc alternatif si la condition est fausse";
+    }
+
     public static OpCode2EndConditionalBlock endConditionalEnd() {
         OpCode2EndConditionalBlock res = new OpCode2EndConditionalBlock();
         res.endType = EEndType.END;

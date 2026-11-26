@@ -129,6 +129,33 @@ void logString(const char* str, int len){
     }
 }
 
+void formatLogTimestamp(char* out, unsigned int outSize){
+    if (outSize == 0) return;
+    out[0] = 0;
+    u64 posixNs = 0;
+    // PosixTime = nanosecondes depuis l'epoch. Horloge reseau d'abord (0 si pas de synchro
+    // internet), puis horloge user (0 si l'heure de la Switch n'a jamais ete reglee).
+    if (R_FAILED(timeGetCurrentTime(TimeType_NetworkSystemClock, &posixNs)) || posixNs == 0) {
+        posixNs = 0;
+        timeGetCurrentTime(TimeType_UserSystemClock, &posixNs);
+    }
+    if (posixNs > 0) {
+        time_t secs = (time_t)(posixNs / 1000000000ULL); // ns -> s
+        tm* lt = localtime(&secs);
+        if (lt) {
+            strftime(out, outSize, " %Y-%m-%d %H:%M:%S", lt);
+            return;
+        }
+    }
+    // Horloge non reglee : uptime depuis le boot (svcGetSystemTick = ticks a 19.2 MHz)
+    u64 ms = svcGetSystemTick() / 19200ULL;
+    snprintf(out, outSize, " [up %llu:%02llu:%02llu.%03llu]",
+             (unsigned long long)(ms / 3600000ULL),
+             (unsigned long long)((ms / 60000ULL) % 60ULL),
+             (unsigned long long)((ms / 1000ULL) % 60ULL),
+             (unsigned long long)(ms % 1000ULL));
+}
+
 static int net_main(Gecko::Context& ctx) {
     int cmd;		
 	cmd = ctx.conn.read();
@@ -195,9 +222,11 @@ int main(int argc, char **argv)
 
     printf("[Main] Starting Gecko gateway\n");
 
-    time_t timer  = time(NULL);
-	struct tm* timerTm = localtime(&timer);
-    printf(">>[%04d-%02d-%02d %02d:%02d:%02d]\n", timerTm->tm_year+1900, timerTm->tm_mon+1, timerTm->tm_mday, timerTm->tm_hour, timerTm->tm_min, timerTm->tm_sec);
+    // time(NULL) peu fiable sur sysmodule : utiliser formatLogTimestamp
+    // (horloge systeme ns->s, fallback uptime via svcGetSystemTick)
+    char bootTs[40] { 0 };
+    formatLogTimestamp(bootTs, sizeof(bootTs));
+    printf(">> boot%s\n", bootTs);
 
 
     Thread threadNetwork;

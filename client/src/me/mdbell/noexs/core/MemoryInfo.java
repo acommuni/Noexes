@@ -3,13 +3,13 @@ package me.mdbell.noexs.core;
 public class MemoryInfo {
     private long addr; // 64
     private long size; // 64
-    private MemoryType type; // 32
+    private EMemoryType type; // 32
     private int perm; // 32
 
     public MemoryInfo(long addr, long size, int type, int perm) {
         this.addr = addr;
         this.size = size;
-        this.type = MemoryType.valueof(type);
+        this.type = EMemoryType.valueof(type);
         this.perm = perm;
     }
 
@@ -25,7 +25,7 @@ public class MemoryInfo {
         return addr + size;
     }
 
-    public MemoryType getType() {
+    public EMemoryType getType() {
         return type;
     }
 

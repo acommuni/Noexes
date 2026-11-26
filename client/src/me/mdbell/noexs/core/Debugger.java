@@ -37,10 +37,10 @@ import me.mdbell.noexs.core.debugger.RDebSetBreakpointInput;
 import me.mdbell.noexs.core.debugger.RDebStatusOutput;
 import me.mdbell.noexs.core.utils.AutoReleaseSemaphore;
 import me.mdbell.noexs.misc.BreakpointFlagBuilder;
-import me.mdbell.noexs.misc.BreakpointType;
+import me.mdbell.noexs.misc.EBreakpointType;
 import me.mdbell.noexs.misc.WatchpointFlagBuilder;
 import me.mdbell.noexs.ui.NoexsApplication;
-import me.mdbell.noexs.ui.models.DataType;
+import me.mdbell.noexs.ui.models.EDataType;
 import me.mdbell.util.HexUtils;
 
 public class Debugger implements Commands, Closeable {
@@ -97,7 +97,7 @@ public class Debugger implements Commands, Closeable {
         }
     }
 
-    public DebuggerStatus getStatus() {
+    public EDebuggerStatus getStatus() {
         return withLock(() -> {
             RDebStatusOutput statusOutput = DebuggerUtils.runCommand(conn, EDebCommand.COMMAND_STATUS);
 
@@ -118,11 +118,11 @@ public class Debugger implements Commands, Closeable {
                 throw new ConnectionException(String.format("Unsupported protocol version:%08X", protocolVersion));
             }
             protocolVersion |= patch;
-            return DebuggerStatus.forId(status);
+            return EDebuggerStatus.forId(status);
         });
     }
 
-    public void poke(DataType type, long addr, long value) {
+    public void poke(EDataType type, long addr, long value) {
         EMemoryAccess ma = EMemoryAccess.from(type);
         poke(ma.pokeCommand(), ma.newPokeInput(addr, value));
     }
@@ -150,13 +150,13 @@ public class Debugger implements Commands, Closeable {
 
     public Result setWatchpoint(boolean read, boolean write, long addr) {
         return withLock(() -> {
-            WatchpointFlagBuilder.MatchType t;
+            WatchpointFlagBuilder.EMatchType t;
             if (read & write) {
-                t = WatchpointFlagBuilder.MatchType.ALL;
+                t = WatchpointFlagBuilder.EMatchType.ALL;
             } else if (read) {
-                t = WatchpointFlagBuilder.MatchType.LOAD;
+                t = WatchpointFlagBuilder.EMatchType.LOAD;
             } else if (write) {
-                t = WatchpointFlagBuilder.MatchType.STORE;
+                t = WatchpointFlagBuilder.EMatchType.STORE;
             } else {
                 throw new IllegalArgumentException("No flags set for watchpoint");
             }
@@ -167,7 +167,7 @@ public class Debugger implements Commands, Closeable {
             int mask = ((1 << size) - 1) << offset;
 
             BreakpointFlagBuilder bp = new BreakpointFlagBuilder().setEnabled(true).setAddressSelect(0xF)
-                    .setBreakpointType(BreakpointType.LINKED_CONTEXT_IDR_MATCH);
+                    .setBreakpointType(EBreakpointType.LINKED_CONTEXT_IDR_MATCH);
             WatchpointFlagBuilder wp = new WatchpointFlagBuilder().setEnabled(true).setAccessContol(t)
                     .setAddressSelect(mask).setLinkedBreakpointNumber(bpId);
             Result rc = setBreakpoint(bpId, bp.getFlag(), 0);
@@ -329,7 +329,7 @@ public class Debugger implements Commands, Closeable {
                     MemoryInfo info = readInfo();
                     res[count] = info;
                     memInfoCache.put(info.getAddress(), info); // pré-remplit le cache LRU
-                    if (info.getType() == MemoryType.RESERVED) {
+                    if (info.getType() == EMemoryType.RESERVED) {
                         break;
                     }
                 }
@@ -1068,7 +1068,7 @@ public class Debugger implements Commands, Closeable {
         return res;
     }
 
-    public long peek(DataType type, long addr) {
+    public long peek(EDataType type, long addr) {
         EMemoryAccess ma = EMemoryAccess.from(type);
         ByteBuffer buf = peekN(ma.size(), addr);
         return ma.extractPeek(buf);

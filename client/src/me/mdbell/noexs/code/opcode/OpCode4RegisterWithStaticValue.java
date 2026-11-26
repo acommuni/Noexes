@@ -50,4 +50,10 @@ public class OpCode4RegisterWithStaticValue extends AOpCode {
         return null;
     }
 
+    @Override
+    public String explain() {
+        return "Charge la valeur statique 0x" + Long.toHexString(value.getValue()).toUpperCase() + " dans le registre R"
+                + register.getRegister();
+    }
+
 }

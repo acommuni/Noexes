@@ -1,6 +1,6 @@
 package me.mdbell.noexs.ui.models;
 
-public enum DataType {
+public enum EDataType {
     BYTE("8 bit", 1),
     SHORT("16 bit", 2),
     INT("32 bit", 4),
@@ -9,7 +9,7 @@ public enum DataType {
     String str;
     int bytes;
 
-    DataType(String str, int bytes) {
+    EDataType(String str, int bytes) {
         this.str = str;
         this.bytes = bytes;
     }

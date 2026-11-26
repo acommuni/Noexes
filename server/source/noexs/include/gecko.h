@@ -54,25 +54,21 @@ namespace Gecko{
 
 void logString(const char* str, int len);
 
+/* Ecrit dans out l'horodatage pour les logs : " YYYY-MM-DD HH:MM:SS" (horloge systeme,
+   TimeType_NetworkSystemClock d'abord puis UserSystemClock), ou " [up H:MM:SS.mmm]" (uptime
+   via svcGetSystemTick, tick 19.2 MHz) si l'heure de la console n'est pas reglee.
+   Note : timeGetCurrentTime renvoie un PosixTime en NANOSECONDES (diviser par 1e9 pour
+   obtenir des secondes — l'ancien code castait les ns directement en time_t). */
+void formatLogTimestamp(char* out, unsigned int outSize);
+
 #define printf(fmt, ...) {                                                                          \
     char formattedString[2048];                                                                     \
     snprintf(formattedString, 2048,fmt, ##__VA_ARGS__);                                             \
-    struct timeval tv;                                                                              \
-    gettimeofday(&tv, NULL);                                                                        \
-    time_t current_time = tv.tv_sec;                                                                \
-    struct tm *time_info = localtime(&current_time);                                                \
-    char timebuffer[100];                                                                           \
-    strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d %H:%M:%S", time_info);                       \
-    char logTimeBuffer[32] { 0 };                                                                   \
-    u64 currentTime;                                                                                \
-    timeGetCurrentTime(TimeType_UserSystemClock, &currentTime);                                  \
-    tm* localTime = std::localtime((std::time_t*)(&currentTime));                                   \
-    std::strftime(logTimeBuffer, sizeof(logTimeBuffer), " %Y-%m-%d %H:%M:%S", localTime);                        \
+    char logTimeBuffer[40] { 0 };                                                                   \
+    formatLogTimestamp(logTimeBuffer, sizeof(logTimeBuffer));                                      \
     char buffer[2176];                                                                              \
     logString(buffer, snprintf(buffer, 2176,"[%s] %s", logTimeBuffer, formattedString));            \
 }
-
-//logString(buffer, snprintf(buffer, 2176,"[%s.%03ld] %s", timebuffer,tv.tv_usec / 1000, formattedString)); 
 
 #define simpprintf(fmt, ...) {                                          \
     char buffer[2048];                                              \

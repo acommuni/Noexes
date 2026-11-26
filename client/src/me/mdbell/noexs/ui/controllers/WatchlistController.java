@@ -30,7 +30,7 @@ import javafx.scene.layout.AnchorPane;
 import me.mdbell.javafx.control.HexSpinner;
 import me.mdbell.javafx.control.SpinnerTableCell;
 import me.mdbell.noexs.core.Debugger;
-import me.mdbell.noexs.ui.models.DataType;
+import me.mdbell.noexs.ui.models.EDataType;
 import me.mdbell.noexs.ui.models.WatchlistModel;
 import me.mdbell.util.HexUtils;
 
@@ -45,7 +45,7 @@ public class WatchlistController implements IController {
     public TableColumn<WatchlistModel, Boolean> lockedCol;
     public TableColumn<WatchlistModel, String> addrCol;
     public TableColumn<WatchlistModel, String> descCol;
-    public TableColumn<WatchlistModel, DataType> typeCol;
+    public TableColumn<WatchlistModel, EDataType> typeCol;
     public TableColumn<WatchlistModel, Long> valueCol;
     @FXML
     AnchorPane watchlistTabPage;
@@ -66,9 +66,9 @@ public class WatchlistController implements IController {
 
         updateCol.setCellFactory(param -> new CheckBoxTableCell<>());
         lockedCol.setCellFactory(param -> new CheckBoxTableCell<>());
-        typeCol.setCellFactory(param -> new ComboBoxTableCell<>(DataType.values()) {
+        typeCol.setCellFactory(param -> new ComboBoxTableCell<>(EDataType.values()) {
             {
-                setItem(DataType.INT);
+                setItem(EDataType.INT);
             }
         });
         addrCol.setCellFactory(TextFieldTableCell.forTableColumn());
@@ -160,7 +160,7 @@ public class WatchlistController implements IController {
         boolean locked;
         String addr;
         String desc;
-        DataType type;
+        EDataType type;
         long value;
 
         protected SerializedWatchlistItem() {

@@ -187,6 +187,7 @@ static Result _readmem(Gecko::Context& ctx){
 
     READ_CHECKED(ctx, addr);				
     READ_CHECKED(ctx, size);
+    printf("Command [0x06]: readmem addr=%lx size=%x\n", addr, size);
     if (dmnt) rc = dmntchtHasCheatProcess(out);
     else rc = ctx.dbg.attached();
     WRITE_CHECKED(ctx, rc);
@@ -198,6 +199,7 @@ static Result _readmem(Gecko::Context& ctx){
             WRITE_CHECKED(ctx, rc);
         
             if(R_FAILED(rc)){
+                printf("Command [0x06]: readmem FAILED at addr=%lx len=%x rc=%x\n", addr, len, (int)rc);
                 break;
             }
             rc = writeCompressed(ctx, len);
@@ -208,6 +210,7 @@ static Result _readmem(Gecko::Context& ctx){
             size -= len;
         }
     }
+    printf("Command [0x06]: readmem done remaining=%x rc=%x\n", size, (int)rc);
     return rc;
 }
 
@@ -265,7 +268,7 @@ static Result _attach(Gecko::Context& ctx){
     u64 pid;
     READ_CHECKED(ctx, pid);    
     Result rc = ctx.dbg.attach(pid);
-    printf("Command [0x0A]: _attach => Pid:%lu,Status;%d\n",pid,ctx.status);
+    printf("Command [0x0A]: _attach => Pid:0x%lx,Status:%d\n",pid,ctx.status);
     if(R_SUCCEEDED(rc)){
         dmnt = false;
         ctx.status = Gecko::Status::Paused;
@@ -334,6 +337,7 @@ static Result _querymem_multi(Gecko::Context& ctx) {
     MemoryInfo info = {};
     READ_CHECKED(ctx, addr);
     READ_CHECKED(ctx, requestCount);
+    printf("Command [0x0D]: querymem_multi start=%lx max=%x\n", addr, requestCount);
            
     for(count = 0; count < requestCount; count++){
         if (dmnt) rc = dmntchtQueryCheatProcessMemory(&info, addr);
@@ -348,6 +352,7 @@ static Result _querymem_multi(Gecko::Context& ctx) {
         }
         addr += info.size;
     }
+    printf("Command [0x0D]: querymem_multi done => %u regions, rc=%x\n", count, (int)rc);
     return rc;
 }
 
@@ -442,6 +447,7 @@ static Result _readmem_multi(Gecko::Context& ctx){
     bool* out = nullptr;
     READ_CHECKED(ctx, size);
     READ_CHECKED(ctx, data_size);
+    printf("Command [0x13]: readmem_multi zones=%u data_size=%x\n", size, data_size);
     if (dmnt) rc = dmntchtHasCheatProcess(out);
     else rc = ctx.dbg.attached();
     if(R_SUCCEEDED(rc)){
@@ -457,11 +463,13 @@ static Result _readmem_multi(Gecko::Context& ctx){
             else rc = ctx.dbg.readMem(ctx.buffer, addr, data_size);
             WRITE_CHECKED(ctx, rc);
             if(R_FAILED(rc)){
+                printf("Command [0x13]: zone %u addr=%lx FAILED rc=%x\n", count, addr, (int)rc);
                 break;
             }
             WRITE_BUFFER_CHECKED(ctx,ctx.buffer, data_size);
         }
     }
+    printf("Command [0x13]: readmem_multi done zones=%u/%u rc=%x\n", count, size, (int)rc);
     return rc;
 }
 
@@ -577,9 +585,11 @@ static Result processlocal(Gecko::Context &ctx, u64 m_start, u64 m_end, u64 m_va
     u64 addr, from, to;
     MemoryInfo info = {};
     u32 out_index = 0;
+    u64 hits = 0;
+    u64 t0 = svcGetSystemTick();
     addr = m_start;
     u8 cont = 1;
-    printf("processing local m_start = %lx m_end =  %lx m_value1 = %lx m_value2 = %lx searchsize = %x searchtype = %x\n", m_start, m_end, m_value1, m_value2, (u8)searchsize, (u8)searchtype);
+    printf("Command [0x16]: searchlocal start=%lx end=%lx v1=%lx v2=%lx size=%x type=%x\n", m_start, m_end, m_value1, m_value2, (u8)searchsize, (u8)searchtype);
     while (addr < m_end) {
         if (dmnt)
             rc = dmntchtQueryCheatProcessMemory(&info, addr);
@@ -619,6 +629,7 @@ static Result processlocal(Gecko::Context &ctx, u64 m_start, u64 m_end, u64 m_va
                         bool match = (searchtype == EQ) ? (val == target1) : (val >= target1 && val <= target2);
                         if (!match)
                             continue;
+                        hits++;
                         from = addr + i;   // adresse exacte du match
                         to = val;          // valeur trouvée
                         // Fill buffer
@@ -658,6 +669,9 @@ static Result processlocal(Gecko::Context &ctx, u64 m_start, u64 m_end, u64 m_va
     }
     WRITE_CHECKED(ctx, 0);
     READ_CHECKED(ctx, cont);
+    u64 ms = (svcGetSystemTick() - t0) / 19200ULL; // tick 19.2 MHz
+    printf("Command [0x16]: searchlocal done => %llu hits in %llu ms (rc=%x)\n",
+           (unsigned long long)hits, (unsigned long long)ms, (int)rc);
     return rc;
 }
 
@@ -892,6 +906,7 @@ static Result _get_frozen_addresses(Gecko::Context& ctx){
             offset += out_count;
         }
     }
+    printf("Command [0x30]: get_frozen_addresses => count=%llu rc=%x\n", (unsigned long long)count, (int)rc);
     return rc;
 }
 
@@ -901,8 +916,11 @@ static Result _get_frozen_addresses(Gecko::Context& ctx){
 static Result _disable_frozen_address(Gecko::Context& ctx){
     u64 addr;
     READ_CHECKED(ctx, addr);
-    if (!dmnt) return MAKERESULT(Module_TCPGecko, TCPGeckoError_not_attached);
-    return dmntchtDisableFrozenAddress(addr);
+    Result rc;
+    if (!dmnt) rc = MAKERESULT(Module_TCPGecko, TCPGeckoError_not_attached);
+    else rc = dmntchtDisableFrozenAddress(addr);
+    printf("Command [0x31]: disable_frozen_address addr=%lx => rc=%x\n", addr, (int)rc);
+    return rc;
 }
 
 //0x32 — Variante compressée (RLE) de _readmem_multi : chaque zone est lue par sous-chunks
@@ -920,6 +938,9 @@ static Result _readmem_multi_compressed(Gecko::Context& ctx){
     bool* out = nullptr;
     READ_CHECKED(ctx, data_size);
     READ_CHECKED(ctx, size);
+    u64 total = 0;
+    u64 t0 = svcGetSystemTick();
+    printf("Command [0x32]: readmem_multi_compressed zones=%u data_size=%x\n", size, data_size);
     if (dmnt) rc = dmntchtHasCheatProcess(out);
     else rc = ctx.dbg.attached();
     WRITE_CHECKED(ctx, rc);
@@ -934,6 +955,7 @@ static Result _readmem_multi_compressed(Gecko::Context& ctx){
                 else rc = ctx.dbg.readMem(ctx.buffer, addr, len);
                 WRITE_CHECKED(ctx, rc);
                 if(R_FAILED(rc)){
+                    printf("Command [0x32]: zone %u addr=%lx FAILED len=%x rc=%x\n", count, addr, len, (int)rc);
                     aborted = true;
                     break;
                 }
@@ -944,9 +966,14 @@ static Result _readmem_multi_compressed(Gecko::Context& ctx){
                 }
                 addr += len;
                 remaining -= len;
+                total += len;
             }
         }
     }
+    u64 ms = (svcGetSystemTick() - t0) / 19200ULL; // tick 19.2 MHz
+    printf("Command [0x32]: readmem_multi_compressed done zones=%u/%u bytes=%llu in %llu ms (%llu B/s) rc=%x\n",
+           count, size, (unsigned long long)total, (unsigned long long)ms,
+           ms > 0 ? (unsigned long long)(total * 1000ULL / ms) : 0ULL, (int)rc);
     return rc;
 }
 

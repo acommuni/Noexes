@@ -1,3 +1,235 @@
+=== explainCheat : expliquer un cheat venu d'ailleurs — FAIT (code) ===
+OpCodeManager.explainCheat(String content) : decode un contenu style cheatdb (sections [Nom],
+opcodes hex, commentaires # ignores) et produit "HEX => explication en clair" par ligne +
+résumé (instruction abstraite). AOpCode.explain() (défaut = abstractInstruction ou toString)
+redéfini dans chaque opcode (0/2/4/5/6/7/8/C1/Label) avec une phrase en français.
+Test : TestExplainCheat. A brancher dans l'UI : navigateur de cheats cheatdb avec volet
+"explication" par cheat (inverse du CheatCodeMaker + explication).
+
+=== Warnings JDK 24+/27 : native access + Unsafe — A TRAITER ===
+Symptômes (run sur JDK 27) : "Restricted method System::load called" par
+javafx.graphics (NativeLibLoader) et usb4java Loader (module unnamed), et
+"terminally deprecated sun.misc.Unsafe::allocateMemory" par com.sun.marlin.OffHeapArray
+(javafx-graphics 19.0.2.1). Sans flag, le native access sera BLOQUÉ dans un futur JDK.
+Fix appliqué : run.bat à la racine de sources/client avec
+  java --enable-native-access=ALL-UNNAMED,javafx.base,javafx.graphics,javafx.controls,javafx.fxml,javafx.media,javafx.swing,javafx.web -jar shade\noexs.jar
+(le flag ne peut PAS aller dans le manifest du jar — JEP 472 exige la ligne de commande ;
+lister TOUS les modules javafx, sinon warning sur chacun). Lancer via run.bat.
+JavaFX monte en 27.0.1.1 (pom javafx.version=27.0.1.1) : compile + tests 20/20 OK en
+release=27 sur JDK 27.0.1+1. Le warning Unsafe/Marlin persiste côté JavaFX 27 -> le flag
+reste obligatoire ; usb4java 1.3.0 (dernière version) couvert par ALL-UNNAMED.
+Note : build offline (-o) peut échouer sur la résolution de build-helper-maven-plugin
+3.8.0 (_remote.repositories) -> relancer sans -o.
+
+=== Modernisation Java — MIGRE EN JDK 27 (LTS) FAIT, reste à profiter des features 21+ ===
+MIGRATION FAITE : pom.xml en maven.compiler.release=27 + javafx.version=27.0.1.1,
+build/test OK sur JDK 27 (E:\Programmation\Java\jdk-27.0.1.0.2+1, Temurin 27.0.1+1),
+20/20 tests, lancement via run.bat (flags --enable-native-access, voir section warnings).
+JDK 23 aussi dispo : E:\Programmation\Java\AdoptOpenJDK\jdk-23.0.1+11.
+FAIT (Java 17, maven.compiler.release=17) :
+- switch expressions (Java 14+) : MemoryDump.getValue, MainController (2x AlertType),
+  WriteValue.getLongValue/getHexValue, ConversionUtils.sourceToLong (les 2 switch hex/dec
+  quasi identiques factorisés en parseValue(convType, value, radix) — ~75 lignes supprimées)
+- pattern matching for instanceof (Java 16+) : CheatCodeMaker.generateInstructionBlock,
+  OpCodeOperation.buildCodeFromFragments, SearchResult (2x) — plus de casts manuels
+- records déjà utilisés pour le protocole (RDeb*).
+
+=== Associer un GDB pour debugger en temps reel — A ETUDIER ===
+Piste 1 (probablement déjà dispo) : le sysmodule dmnt d'Atmosphere embarque un stub GDB
+(sources upstream stratosphere/dmnt/source/gdb/, absent du clone sparse /tmp/atm qui ne
+contient que cheat/). Il écoute en TCP sur le port 24689 par défaut (configurable via ini
+atmosphere). Test : depuis le PC, gdb-multiarch (ou aarch64-none-elf-gdb) :
+  target remote <ip-switch>:24689
+  puis attach du process du jeu (le stub dmnt doit avoir le process attaché — notre noexs
+  fait pause via 0x09 / attach 0x0A, et dmntchtPauseCheatProcess côté 0x1A) :
+  contrôler pause/resume/step/breakpoints depuis GDB en temps reel.
+  Verifier : port 24689 ouvert sur la Switch (nmap), version d'Atmosphere (le stub existe
+  depuis longtemps), et si le port est modifiable (ini) pour eviter les conflits.
+Piste 2 (si le stub dmnt est desactive/absent) : implementer le protocole GDB remote (RSP)
+  dans NOTRE serveur noexs : nouvelles commandes 0x3D/0x3E (debug events) + lecture/ecriture
+  registres via svcGetDebugThreadContext / svcSetDebugThreadContext, breakpoints soft via
+  svcSetHardwareBreakpoint — c'est un gros chantier ; le stub Atmosphere est préférable.
+Piste 3 : pont dans le client JNoexs — onglet Debug : se connecter au stub GDB (24689),
+  forwarder les commandes GDB de l'UI (ou embarquer un client GDB minimal) ; utiliser nos
+  commandes 0x3D/0x3E pour remonter les evenements (breakpoint/exception) côté app.log.
+Piste 4 (Java) : PAS de lib Java standalone mature sur Maven pour le RSP. Options :
+  - implementer le RSP nous-mêmes en Java (protocole simple : paquets TCP "$...#checksum"
+    + ack '+', commandes qSupported / ? / m(read mem) / M(write) / g(read regs) / G / Z0..
+    (breakpoint) / c / s / vCont) — ~300-500 lignes pour un client minimal aarch64 Switch
+    (registres x0-x30, sp, pc, pstate via 'g'). Le MI (gdb -i=mi2) est plus simple à parser
+    si on spawne un process gdb local, mais moins intégrable.
+  - réutiliser Eclipse CDT DSF-GDB (org.eclipse.cdt.dsf.gdb, github eclipse-cdt/cdt, branche
+    dsf-gdb) : vrai client GDB en Java (MI), mais couplé à la plateforme Eclipse (OSGi) —
+    lourd à embarquer dans JNoexs. NetBeans CND a pareil (org.netbeans.modules.cnd.*).
+  - libs RSP existantes (blitz/gdb-remote, probe-rs/gdb-serial-protocol) sont en Rust, pas Java.
+  => recommandation : mini-client RSP maison en Java dans JNoexs (package core.gdb), testable
+     contre le stub dmnt de la Switch (24689).
+Piste 5 (porter un frontend GDB graphique C/Rust en Java) — ETUDE FAITE :
+  - C/C++ : Nemiver (C++/GTKmm, pilote GDB via MI, arbre de variables, graphe de données),
+    DDD (C/Motif, graphe de structures), KDbg (C++/Qt). Architectures intéressantes mais
+    code GUI couplé à GTK/Qt/Motif -> portage lourd et peu utile : JNoexs a DEJA des vues
+    équivalentes (onglet MEMORY_VIEWER en hex, onglet DISASSEMBLER, liste de breakpoints).
+  - Rust : PAS de frontend GDB graphique mature en Rust (gdbgui/Voltron/pwndbg/GEF sont en
+    Python ; rust-gdbgui n'est qu'un wrapper Python livré avec rustc ; probe-rs = lib RSP
+    côté serveur, pas un GUI). Les libs Rust (probe-rs/gdb-serial-protocol) sont des
+    serveurs/protocole, pas des UI.
+  => conclusion : ne PAS porter un GUI C/Rust. Porter seulement la LOGIQUE client GDB
+     (RSP/MI : paquets, registres, breakpoints, step/continue) en Java — c'est la piste 4 —
+     et réutiliser les onglets JNoexs existants (MemoryViewer, Disassembler) comme vues.
+     Nemiver/DDD servent de référence d'UX (panneaux registres/mémoire/stack/watch), pas de code.
+A noter : notre noexs pause le process (0x09) — verifier qu'un process pause par noexs
+reste debuggable par le stub dmnt (conflit possible entre deux "debuggers" sur le même
+process — svc debug events exclusifs : tester qui gagne).
+
+=== Connexion USB dans un thread dédié (client + serveur) — A ETUDIER/PLANIFIER ===
+Contexte : le transport actuel est TCP/WiFi (USB tenté d'abord puis fallback réseau,
+libusb4java 1.3.0 deja dans le pom). L'USB (480 Mb/s vs WiFi) serait bien plus rapide
+pour les gros dumps (~2 Go).
+QUESTIONS A ETUDIER :
+1) Côté SERVEUR (sysmodule noexs) : voir comment se comporte la boucle USB actuelle
+   (net.cpp / context.cpp) — tourner la connexion USB dans un THREAD dédié, séparé du
+   thread réseau existant (threadFuncNetworkLoop dans main.cpp).
+2) USB et RESEAU EN MEME TEMPS ? : un seul Gecko::Context partagé entre 2 threads pose
+   problème (buffer ctx.buffer partagé, état status). Voir si : 2 contextes indépendants,
+   ou un mutex global, ou un seul transport actif à la fois avec détection du câble.
+   Le client aussi : IConnection USB (libusb4java, bulk transfers) dans un thread, avec
+   la même interface IConnection que le socket TCP pour que Debugger soit inchangé.
+3) FETCH USB : voir comment implémenter le "fetch" côté USB — control transfers
+   (libusb controlTransfer) vs bulk ; taille des paquets (wMaxPacketSize 512 en high-speed),
+   timeouts, et le protocole noexs par-dessus (1 octet commande + payload, même framing
+   que TCP pour réutiliser DebuggerUtils/Debugger tels quels).
+4) Côté CLIENT : ConnectionType USB déjà existe (EConnectionType) — compléter la détection
+   (libusb hasDevice vid/pid Switch 057e:3000), choisir USB si présent sinon TCP.
+A noter : le sysmodule côté Switch utilise usb:ds / usbd de libnx — verifier si un 2e
+service USB est possible en parallèle du réseau (probablement oui, services distincts).
+
+=== Onglet CHEATS : gestion complète (DB distante + console + upload/download) — A PLANIFIER ===
+Contexte : cheatdb locale existe deja (E:\...\cheatdb, 2139 titleids, source
+https://github.com/HamletDuFromage/switch-cheats-db/releases). Il manque la synchro distante
+et l'integration UI (onglet ETab.CHEATS existe deja dans MainController).
+
+FONCTIONS A AJOUTER :
+1) TELECHARGEMENT DB DISTANTE — PLUSIEURS BASES POSSIBLES (pas une seule) :
+   - liste de sources configurables (fichier de config, ex. cheatdb-sources.json) :
+     HamletDuFromage/switch-cheats-db (releases contents.zip), miroirs GBATemp officiels,
+     db EdiZon-SE, **NE PAS OUBLIER BREEZE** (tomvita/Breeze — sa propre db de cheats,
+     releases/zip du repo github.com/tomvita/Breeze), etc. Chaque source a : nom,
+     URL Git/release, dossier local dédié (ex. cheatdb/<source>/contents/<titleid>/cheats/
+     <buildid>.txt), actif oui/non, priorité (ordre de recherche quand plusieurs bases
+     ont le jeu).
+   - au demarrage, pour CHAQUE source active : comparer version locale (.version/commit ou
+     date dernier telechargement) avec le dernier release GitHub (API releases/latest)
+     -> si MAJ dispo, POPUP "Nouvelle version de <source> disponible, télécharger ?"
+     -> telecharge contents.zip (ou clone sparse) dans le dossier de la source.
+   - recherche du cheat : parcourir les sources par ordre de priorité, 1er <buildid>.txt
+     trouvé gagne ; afficher dans l'UI de quelle source vient le cheat.
+   - FUSION DE CHEATS MULTI-SOURCES (quand plusieurs bases ont le même titleid) :
+     - lister toutes les sources ayant <titleid>, et pour chacune ses buildids ;
+     - fusionner les sections [Nom du cheat] de tous les fichiers (même buildid ou non) :
+       dédup par nom de section (insensible à la casse) ; en cas de doublon, garder la
+       version de la source prioritaire et tagger l'autre "doublon de <source>" ;
+     - si buildids différents : marquer les cheats venant d'un autre buildid
+       "à rebaser ?" (voir assistant de rebase) ; permettre de choisir le buildid de
+       référence (celui de la console via 0x38) ;
+     - résultat : un fichier fusionné virtuel (ou écrit <titleid>_merged.txt) avec pour
+       chaque cheat sa source d'origine affichée dans l'UI ;
+     - option "tout envoyer à la console" = upload du fusionné via 0x36/0x41.
+   - BASE PERSO EN LOCAL : une source spéciale "user" (ex. cheatdb/user/ ou
+     %APPDATA%/JNoexs/mycheats/), toujours prioritaire sur les DB téléchargées, non
+     écrasée par les mises à jour. Permet de :
+     - sauvegarder ses propres cheats (créés via CheatCodeMaker/DSL, édités à la main,
+       ou copiés depuis une recherche : "générer cheat depuis cette adresse/valeur") ;
+     - les retrouver par titleid comme les autres sources, les marquer "perso" dans l'UI ;
+     - les partager (export/import d'un dossier .zip).
+2) CHEAT DU JEU COURANT MEME SI VERSION DIFFERENTE :
+   - titleid courant via 0x11, buildid via future commande 0x38 (metadata DMNT)
+   - si <buildid>.txt existe -> l'utiliser ; sinon lister les autres buildids dispos pour ce
+     titleid et proposer le plus proche (ou tous) + warning "version différente, rebase peut
+     être nécessaire" (voir assistant de rebase).
+3) ONGLET CHEATS SPECIALISE :
+   - visualiser ce qui est sur la console : cheats actifs DMNT (futures 0x34 GetCheats /
+     0x35 Toggle), adresses freezées (0x30/0x31, UI encore à faire)
+   - upload : envoyer un cheat vers la console (0x36 AddCheat / 0x41 SetMasterCheat) ou copier
+     vers SD /atmosphere/contents/<titleid>/cheats/<buildid>.txt
+   - download : récupérer les cheats de la console vers le PC
+   - navigateur cheatdb locale + volet "explication" (OpCodeManager.explainCheat, FAIT)
+   - lancer l'assistant de rebase si buildid inconnu.
+VERIF FAITE en release=27 sur JDK 27.0.1+1 (C'EST LA VERSION 27 A PRENDRE EN COMPTE) :
+  cd sources\client
+  JAVA_HOME=/e/Programmation/Java/jdk-27.0.1.0.2+1 mvn clean compile -DskipTests -Denforcer.skip=true -o -Dmaven.compiler.release=27
+  JAVA_HOME=/e/Programmation/Java/jdk-27.0.1.0.2+1 mvn test -Dtest='Test*' -Denforcer.skip=true -o -Dmaven.compiler.release=27
+  => compile OK, tests 20/20 OK. JavaFX 19.0.2.1, log4j2+disruptor, ANTLR (Code.g4),
+     libusb4java, module-info JNoexs : AUCUN souci en release 27. (idem vérifié en 23)
+MIGRATION : poser <maven.compiler.release>27</maven.compiler.release> dans pom.xml
+(source/target suivent la property), builder avec le JDK 27 ci-dessus.
+
+A FAIRE une fois en 27 :
+- pattern matching for switch (final en Java 21, JEP 441) : CheatCodeMaker.generateInstructionBlock
+  -> switch (instruction) { case WriteValue wv -> ...; case ConditionPressButton cpb -> ...; }
+  (supprime la chaîne instanceof); record patterns pour déstructurer les records RDeb*.
+- switch sur class / primitives (Java 23+, JEP 455/461) : DebuggerUtils.formatForLog
+  -> switch sur la Class ou la valeur au lieu de la cascade if (type == long.class)...
+- autres pistes 21+ : virtual threads pour les tâches de dump/recherche (Service),
+  SequencedCollection — à évaluer.
+
+DETAIL DES CHANGEMENTS DE CODE PREVUS (avant -> après), une fois migre en JDK 27 :
+
+1) Pattern matching for switch (JEP 441, final depuis 21) — CheatCodeMaker.generateInstructionBlock :
+   AVANT (Java 17, fait) : chaîne if/else instanceof
+     if (instruction instanceof WriteValue wv) { res.addCodeLines(generateInstructionWriteValue(wv)); }
+     else if (instruction instanceof EndCondition) { ... }
+     ...
+   APRÈS :
+     switch (instruction) {
+         case WriteValue wv -> res.addCodeLines(generateInstructionWriteValue(wv));
+         case EndCondition -> res.addLineToEnd(OpCode2EndConditionalBlock.endConditionalEnd());
+         case ElseCondition -> res.addLineToEnd(OpCode2EndConditionalBlock.endConditionalElse());
+         case ConditionPressButton cpb -> res.addLineToEnd(
+                 OpCode8BeginKeypressConditionalBlock.beginKeypressConditionalBlock(cpb.getKeypad()));
+         default -> logger.warn("Unknown instruction : {}", instruction);
+     }
+   (si IInstruction devient sealed, le default devient inutile -> exhaustivité vérifiée à la compile)
+
+2) Switch sur la valeur avec patterns de type (21+) / sur class (23+) — DebuggerUtils.formatForLog :
+   AVANT : cascade if (type == byte.class) ... else if (type == long[].class) ...
+   APRÈS :
+     return switch (value) {
+         case null -> null;
+         case Byte b -> b & 0xFFL;
+         case Long l -> "0x" + Long.toHexString(l).toUpperCase();
+         case String s -> "\"" + s + "\"";
+         case byte[] b -> "\"" + new String(b, StandardCharsets.UTF_8) + "\"";
+         case long[] a -> { /* liste hex tronquée */ }
+         default -> value.getClass().isArray() ? Arrays.deepToString((Object[]) value) : value;
+     };
+
+3) Record patterns (JEP 440, final depuis 21) — Debugger.getFrozenAddresses :
+   AVANT : for (RDebFrozenAddressEntry e : entries) list.add(new FrozenAddress(e.address(), e.value(), e.width() & 0xFF));
+   APRÈS : for (RDebFrozenAddressEntry(long address, long value, byte width) : entries)
+              list.add(new FrozenAddress(address, value, width & 0xFF));
+
+4) Virtual threads (JEP 444, final depuis 21) — tâches I/O du dump/recherche :
+   AVANT : Service<?> (pool fixe) dans SearchController/MemorySearchService
+   APRÈS : Executors.newVirtualThreadPerTaskExecutor() pour la boucle de dump et la recherche
+   (milliers de lectures bloquantes sans épuiser les threads platform). A combiner avec
+   le futur thread USB dédié.
+
+5) SequencedCollection (JEP 431, depuis 21) — List.getFirst()/getLast() :
+   OpCodeManager.abstractInstructions : get(size-1) -> getLast().
+
+6) Structured concurrency (preview en 27, JEP 480/505) — pour plus tard :
+   gérer ensemble les threads USB + réseau côté client (StructuredTaskScope) au lieu de
+   sémaphores manuels (AutoReleaseSemaphore).
+
+=== DEPLOIEMENT SYSMODULE 1.1.161 — FAIT ===
+Rebuild (devkitPro) + reinstall sur la Switch du sysmodule noexs VER_PATCH 161 effectues :
+- format record des commandes 0x30/0x31/0x32 (PROTOCOL_VERSION_RECORD_EXT=0x101A1)
+- horodatage GeckoLog.txt corrige (formatLogTimestamp, ns->s, fallback uptime)
+- logs verbeux des commandes (0x06/0x0D/0x13/0x16/0x30/0x31/0x32)
+- fix %.2034s du printf de 0x33
+Rappel : regler l'heure dans Parametres > Systeme > Date et heure de la Switch pour avoir
+les vraies dates dans GeckoLog.txt (sinon fallback uptime [up H:MM:SS]).
+
 - New arithmetic
 - Multiple button
 - Conditions
@@ -248,7 +480,7 @@ code_types (lu), code_creation, conclusion, contact, interactive ASM cheats upda
   + PointerSearcher-SE (pointeurs). Un seul client a la fois sur le sysmodule.
   Modes de recherche EdiZon A-L : ==, >, <, between, unknown/different, ?-/-- decrease,
   ?+/++ increase, !=, same, PTR. Regions : MAIN / HEAP / RAM(all).
-  => correspond a nos SearchType/ConditionType dans MemorySearchService.
+  => correspond a nos ESearchType/EConditionType dans MemorySearchService.
 - Page "cheat_creation" : workflow bookmarks EdiZon (== nos commandes 0x1B/0x1C get/put bookmark)
   -> drag dans PointerSearcher-SE target addresses ; Max Depth defaut 4, Offset Num/Range ;
   valeurs voisines en memoire = pointeurs similaires.
@@ -263,6 +495,21 @@ Structure : contents/contents/<titleid>/cheats/<buildid>.txt (+ <titre>.txt par 
 => utilisable pour : navigateur de cheats dans l'UI (par title id, lu via 0x11 getTitleId),
    envoi via futures commandes 0x36 AddCheat / 0x41 SetMasterCheat, ou copie vers SD
    /atmosphere/contents/<titleid>/cheats/<buildid>.txt. buildid obtenu via 0x38 metadata.
+
+=== Commentaires dans le DSL / fichiers cheat — A PLANIFIER ===
+Objectif : pouvoir mettre un cheat EN COMMENTAIRE (désactivé) dans le DSL et dans les
+fichiers .txt, sans le supprimer.
+- DSL (Code.g4) : accepter un prefixe commentaire (ex. "//" ou ";" en début de ligne, ou
+  mot-cle "comment") -> l'instruction est parsée mais marquée disabled.
+- Génération (CheatCodeMaker / encodeCheatCode) : un cheat commenté est émis en ligne
+  commentée dans le .txt (prefixe ";" ou "#" selon convention Atmosphere — à confirmer :
+  Atmosphere ignore les lignes non reconnues, EdiZon utilise ";" ?). Le decode
+  (OpCodeManager.decodeCheatCode) et explainCheat ignorent déjà les lignes "#" ;
+  à étendre au préfixe choisi.
+- UI : case à cocher "activé" par cheat dans le navigateur de cheats ; décocher = commenter
+  la ligne dans le fichier (ou envoyer sans le cheat via 0x34/0x35 toggle côté console).
+- explainCheat : afficher les cheats commentés en grisé "(désactivé)" au lieu de les
+  ignorer silencieusement.
 
 === Assistant de rebase de cheats (mise a jour de jeu, adresses qui changent) ===
 Idee : apres une MAJ du jeu (nouveau build id), les offsets MAIN changent. Assistant pour
@@ -285,7 +532,7 @@ ETAPES :
    main_base+offset) dans l'ancien dump (MemoryDump + DumpIndex) => signature.
 3. Chercher la signature dans le dump courant, région MAIN uniquement. PATTERN SEARCH EN JAVA
    PURE sur les DumpIndex (pas besoin de la Switch) : a implementer dans le search service
-   (SearchType n'a pas encore PATTERN : ajouter SearchType.PATTERN ou classe dediee).
+   (ESearchType n'a pas encore PATTERN : ajouter ESearchType.PATTERN ou classe dediee).
 4. delta = (found_addr - new_main_base) - old_offset. Prendre la MEDIANE des deltas (robuste
    aux outliers) ; signaler les cibles avec delta aberrant.
 5. Re-ecrire chaque adresse (old + delta) dans les AOpCode, re-encoder via
@@ -303,7 +550,7 @@ buildids dispos dans cheatdb -> si buildid courant absent, lancer le rebase -> r
 === Rebase INTERACTIF (complement) : demander la valeur affichée a l'ecran, cheat par cheat ===
 Pour chaque cheat de l'ancien fichier (dans l'ordre), le wizard demande a l'utilisateur :
   "Valeur actuellement affichee a l'ecran pour [<nom du cheat>] ?"
-Puis : recherche de cette valeur (SearchType.KNOWN) dans le dump courant, de preference dans
+Puis : recherche de cette valeur (ESearchType.KNOWN) dans le dump courant, de preference dans
 une fenetre autour de l'ancienne adresse (old_addr +/- ex 0x10000) ou dans la region MAIN/HEAP
 selon le cheat. Si plusieurs candidats :
   - prendre le plus proche de old_addr + delta median des cheats deja rebasés ;
@@ -324,7 +571,7 @@ Features qui confirment notre roadmap :
 - "Extract memory address from dmnt cheat code and add to bookmark" => decode cheat
   (OpCodeManager) + putBookmark 0x1C.
 - "Create dmnt cheat code from pointer chain found" => CheatCodeMaker (DSL -> 0x5/0x6/0x7).
-- Range search, unknown search, compare previous, multi-target search => nos SearchType
+- Range search, unknown search, compare previous, multi-target search => nos ESearchType
   actuels + extensions prevues.
 - "Export dump to PC app (forked PointerSearcher)" => exactement notre dump JNoexs -> .dmp.
 
@@ -359,21 +606,21 @@ Threads utiles pour nous :
 - "Request for Noexes Server v1.1.159 Source Code" (sept 2026) => un serveur noexs plus recent
   que notre VER_PATCH=157 existe peut-etre en release ; a verifier s'il a de nouvelles commandes.
 
-=== Horodatage faux dans GeckoLog.txt (sysmodule) — A CORRIGER ===
-Cause 1 (code) : macro printf de server/.../include/gecko.h — timeGetCurrentTime renvoie
-  un PosixTime en NANOSECONDES mais le code le caste en time_t (secondes) -> dates
-  délirantes (ex: 341360197-04-23). Corriger : currentTime / 1000000000ULL avant localtime.
-Cause 2 (config) : TimeType_UserSystemClock = 0 si l'heure de la Switch jamais reglee
-  (Parametres > Systeme > Date et heure, synchro Internet ou manuel) -> lignes 1970-01-01.
-  Correctif code : essayer TimeType_NetworkSystemClock d'abord, fallback UserSystemClock,
-  si 0 afficher uptime via svcGetSystemTick()/19200 (tick 19.2 MHz). Supprimer le code
-  mort gettimeofday/timebuffer. main.cpp:198 (ligne >>[...]) a le meme souci via time(NULL).
-Correctif console (necessaire mais pas suffisant) : regler l'heure dans les parametres.
-Puis rebuilder/reinstaller le sysmodule. Optionnel : ajouter " UTC" dans le format strftime.
+=== Horodatage faux dans GeckoLog.txt (sysmodule) — CORRIGE (code), A REBUILDER ===
+Cause 1 (code) : macro printf de gecko.h castait le PosixTime (NANOSECONDES) de
+  timeGetCurrentTime directement en time_t -> dates délirantes. CORRIGE : nouvelle fonction
+  formatLogTimestamp() (main.cpp, déclarée dans gecko.h) : NetworkSystemClock d'abord puis
+  UserSystemClock, division par 1e9 (ns -> s) avant localtime ; si 0 (heure jamais reglee),
+  fallback uptime " [up H:MM:SS.mmm]" via svcGetSystemTick()/19200. Code mort
+  gettimeofday/timebuffer supprimé de la macro. main.cpp (ligne >>[...]) utilisait
+  time(NULL) -> remplacé par formatLogTimestamp. La macro printf l'utilise aussi.
+Cause 2 (config) : regler l'heure dans Parametres > Systeme > Date et heure (synchro Internet
+  ou manuel) pour avoir la vraie date au lieu de l'uptime.
+A rebuilder/reinstaller le sysmodule pour activer.
 
 === Mode lecture memoire selectionnable dans l'UI — FAIT ===
 SearchTab.fxml : ComboBox readModeDropdown "Mode lecture mémoire" sous les options de recherche,
-alignée sur la colonne Equals (x=21), en dessous de Convert to Hex. 3 choix (ui/models/ReadMode) :
+alignée sur la colonne Equals (x=21), en dessous de Convert to Hex. 3 choix (ui/models/EReadMode) :
   single (comp)  = 0x06 chunks 8KB RLE          (défaut)
   multi (uncomp) = 0x13 brut                     (readmemMultiToStreamRaw)
   multi (comp)   = 0x32 RLE, repli 0x13 si serveur < 1.1.158
@@ -443,7 +690,7 @@ au flushAllBatches, les batches des plus grosses zones sont vidés en premier. A
 sur la correction (adressage par zone), seulement l'ordre d'écriture/progression.
 
 === Mode local (0x16 COMMAND_SEARCH_LOCAL) — FAIT ===
-ReadMode.LOCAL("local (0x16)") ajouté à la liste déroulante "Mode lecture mémoire".
+EReadMode.LOCAL("local (0x16)") ajouté à la liste déroulante "Mode lecture mémoire".
 Quand sélectionné : pas de dump, la recherche est faite côté Switch via 0x16
 (Debugger.searchLocal : input start/end/value1/value2/searchSize/searchType, flux LZ de
 paires (from,to), cont=1 entre chunks, count=0 puis trailing rc). Restriction : KNOWN+EQUALS
@@ -493,3 +740,16 @@ REGLE : le mecanisme record ne sert QUE pour des structures de taille raisonnabl
 readRecord borne tout tableau lu a MAX_RECORD_ARRAY_LENGTH=1_000_000 (exception AVANT allocation,
 sinon OOM sur count corrompu en cas de desync). Les gros volumes (readMem 0x06/0x13/0x32) restent
 en flux manuel — seule l'ENTREE de 0x32 est un record, bornee par le client (batch 64 zones max).
+
+=== Logger les commandes cote serveur de facon plus verbeuse — FAIT (code), A REBUILDER ===
+Pattern "Command [0x%02X]: <nom> <params> => <resultat>" appliqué dans commands.cpp :
+- 0x16 searchlocal : start/end/v1/v2/size/type en entree, puis "done => N hits in M ms (rc)"
+  (compteur hits + svcGetSystemTick/19200 dans processlocal).
+- 0x06 readmem : addr/size, FAILED at addr/len/rc par chunk en echec, done remaining/rc.
+- 0x0D querymem_multi : start/max, done => N regions rc.
+- 0x13 readmem_multi : zones/data_size, zone N addr FAILED rc, done zones=x/y rc.
+- 0x32 readmem_multi_compressed : idem + octets totaux, duree ms et B/s.
+- 0x30 get_frozen_addresses => count + rc ; 0x31 disable_frozen_address addr => rc.
+- 0x33 loggue deja le message (CLIENT LOG: ...).
+A rebuilder/reinstaller le sysmodule pour activer. But : correler app.log (0x33 LOG_MESSAGE)
+et GeckoLog.txt avec les memes horodatages.

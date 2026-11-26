@@ -8,7 +8,7 @@ package me.mdbell.noexs.ui.models;
  *   <li>{@link #MULTI_COMP} — readmem multi 0x32 compressé RLE (serveur &gt;= 1.1.158, sinon repli 0x13)</li>
  * </ul>
  */
-public enum ReadMode {
+public enum EReadMode {
     SINGLE_COMP("single (comp)"),
     MULTI_UNCOMP("multi (uncomp)"),
     MULTI_COMP("multi (comp)"),
@@ -16,7 +16,7 @@ public enum ReadMode {
 
     private final String label;
 
-    ReadMode(String label) {
+    EReadMode(String label) {
         this.label = label;
     }
 

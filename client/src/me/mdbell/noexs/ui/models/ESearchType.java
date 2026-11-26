@@ -1,11 +1,11 @@
 package me.mdbell.noexs.ui.models;
 
-public enum SearchType {
+public enum ESearchType {
     UNKNOWN("Unknown"), PREVIOUS("Previous"), KNOWN("Known"), DIFFERENT("Different");
 
     String readable;
 
-    SearchType(String str) {
+    ESearchType(String str) {
         this.readable = str;
     }
 

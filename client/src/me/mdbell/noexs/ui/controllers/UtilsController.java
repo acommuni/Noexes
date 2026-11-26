@@ -27,7 +27,7 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import me.mdbell.noexs.io.usb.UsbUtils;
-import me.mdbell.noexs.ui.models.ConversionType;
+import me.mdbell.noexs.ui.models.EConversionType;
 import me.mdbell.noexs.ui.models.UsbDeviceInfo;
 import me.mdbell.util.HexUtils;
 
@@ -47,10 +47,10 @@ public class UtilsController implements IController {
     public TextField destConvert;
 
     @FXML
-    ChoiceBox<ConversionType> conversionTypeSource;
+    ChoiceBox<EConversionType> conversionTypeSource;
 
     @FXML
-    ChoiceBox<ConversionType> conversionTypeDest;
+    ChoiceBox<EConversionType> conversionTypeDest;
 
     @FXML
     CheckBox destHex;
@@ -70,14 +70,14 @@ public class UtilsController implements IController {
                     }
                 });
 
-        conversionTypeSource.getItems().addAll(ConversionType.values());
-        conversionTypeSource.getSelectionModel().select(ConversionType.U32);
+        conversionTypeSource.getItems().addAll(EConversionType.values());
+        conversionTypeSource.getSelectionModel().select(EConversionType.U32);
         conversionTypeSource.getSelectionModel().selectedItemProperty()
                 .addListener((observable, oldValue, newValue) -> {
 
                     if (newValue.getLength() > conversionTypeDest.getValue().getLength()) {
-                        ConversionType dst = null;
-                        for (ConversionType ct : ConversionType.values()) {
+                        EConversionType dst = null;
+                        for (EConversionType ct : EConversionType.values()) {
                             if (newValue.getLength() <= ct.getLength()) {
                                 dst = ct;
                                 break;
@@ -90,8 +90,8 @@ public class UtilsController implements IController {
                     filterNumberInputValue();
                 });
 
-        conversionTypeDest.getItems().addAll(ConversionType.values());
-        conversionTypeDest.getSelectionModel().select(ConversionType.U32);
+        conversionTypeDest.getItems().addAll(EConversionType.values());
+        conversionTypeDest.getSelectionModel().select(EConversionType.U32);
         conversionTypeDest.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
             convertValue();
         });
@@ -217,9 +217,9 @@ public class UtilsController implements IController {
             String dest = null;
 
             if (StringUtils.isNotBlank(sourceText)) {
-                ConversionType sourceType = conversionTypeSource.getValue();
+                EConversionType sourceType = conversionTypeSource.getValue();
 
-                ConversionType destType = conversionTypeDest.getValue();
+                EConversionType destType = conversionTypeDest.getValue();
                 boolean toHex = destHex.isSelected();
 
                 Long intermediate = ConversionUtils.sourceToLong(sourceType, sourceText);
@@ -255,7 +255,7 @@ public class UtilsController implements IController {
         destHex.setSelected(StringUtils.startsWithIgnoreCase(sourceToConvert.getText(), "0x"));
 
         sourceToConvert.setText(destConvert.getText());
-        ConversionType bufferConv = conversionTypeSource.getValue();
+        EConversionType bufferConv = conversionTypeSource.getValue();
         conversionTypeSource.setValue(conversionTypeDest.getValue());
         conversionTypeDest.setValue(bufferConv);
 

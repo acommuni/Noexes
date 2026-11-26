@@ -176,7 +176,7 @@ public class PointerSearchController implements IController {
                 return;
             }
             mc.memory().setViewAddress(psr.getAddress());
-            mc.setTab(MainController.Tab.MEMORY_VIEWER);
+            mc.setTab(MainController.ETab.MEMORY_VIEWER);
         });
 
         MenuItem exportPointers = new MenuItem("Export All Pointers Raw");

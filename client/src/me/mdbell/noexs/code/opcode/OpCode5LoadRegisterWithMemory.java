@@ -5,7 +5,7 @@ import me.mdbell.noexs.code.opcode.annotation.AOpCodeOperation;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodePattern;
 import me.mdbell.noexs.code.opcode.model.Address;
 import me.mdbell.noexs.code.opcode.model.ECodeMemoryRegion;
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 import me.mdbell.noexs.code.opcode.model.Flag;
 import me.mdbell.noexs.code.opcode.model.NoOp;
 import me.mdbell.noexs.code.opcode.model.Register;
@@ -35,7 +35,7 @@ import me.mdbell.util.HexUtils;
 public class OpCode5LoadRegisterWithMemory extends AOpCode {
 
     @AOpCodeFieldOrder(order = 1)
-    private EDataType dataType;
+    private EOpCodeDataType dataType;
 
     @AOpCodeFieldOrder(order = 2)
     private ECodeMemoryRegion region;
@@ -53,7 +53,7 @@ public class OpCode5LoadRegisterWithMemory extends AOpCode {
     @AOpCodeFieldOrder(order = 6)
     private Address address;
 
-    public static OpCode5LoadRegisterWithMemory loadFromRegisterAddressEncoding(EDataType dataType,
+    public static OpCode5LoadRegisterWithMemory loadFromRegisterAddressEncoding(EOpCodeDataType dataType,
             ECodeMemoryRegion region, String register, long address) {
         OpCode5LoadRegisterWithMemory res = new OpCode5LoadRegisterWithMemory();
         res.dataType = dataType;
@@ -64,7 +64,7 @@ public class OpCode5LoadRegisterWithMemory extends AOpCode {
         return res;
     }
 
-    public static OpCode5LoadRegisterWithMemory loadFromFixedAddressEncoding(EDataType dataType, String register,
+    public static OpCode5LoadRegisterWithMemory loadFromFixedAddressEncoding(EOpCodeDataType dataType, String register,
             long address) {
         OpCode5LoadRegisterWithMemory res = new OpCode5LoadRegisterWithMemory();
         res.dataType = dataType;
@@ -90,6 +90,15 @@ public class OpCode5LoadRegisterWithMemory extends AOpCode {
             res.append(HexUtils.formatAddress(address.getAddress()));
         }
         return res.toString();
+    }
+
+    @Override
+    public String explain() {
+        String addr = fromRegisterAddressEncoding.getFlag()
+                ? "[adresse calculée par l'instruction précédente] + 0x"
+                        + Long.toHexString(address.getAddress()).toUpperCase()
+                : region.name() + " + 0x" + Long.toHexString(address.getAddress()).toUpperCase();
+        return "Charge dans le registre R" + register.getRegister() + " la valeur " + dataType + " lue à " + addr;
     }
 
 }

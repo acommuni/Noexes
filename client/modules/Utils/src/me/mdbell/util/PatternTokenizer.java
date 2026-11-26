@@ -8,7 +8,7 @@ import java.util.Objects;
 public class PatternTokenizer {
 
     private class Token{
-        TokenType type;
+        ETokenType type;
         int width;
         String value;
 
@@ -22,7 +22,7 @@ public class PatternTokenizer {
         }
     }
 
-    private enum TokenType{
+    private enum ETokenType{
         WILDCARD, WHITESPACE, OPERATOR, NUMERIC
     }
 
@@ -30,31 +30,31 @@ public class PatternTokenizer {
         List<Token> tokens = getTokens(str);
 
         List<PatternCompiler.PatternElement> res = new LinkedList<>();
-        PatternCompiler.Condition condition = PatternCompiler.Condition.EQUALS;
+        PatternCompiler.ECondition condition = PatternCompiler.ECondition.EQUALS;
         for(int i = 0; i < tokens.size(); i++) {
             Token t = tokens.get(i);
-            if(t.type == TokenType.OPERATOR) {
+            if(t.type == ETokenType.OPERATOR) {
                 switch(t.value) {
                     case "!":
-                        condition = PatternCompiler.Condition.NOT_EQUALS;
+                        condition = PatternCompiler.ECondition.NOT_EQUALS;
                         break;
                     case "<":
-                        condition = PatternCompiler.Condition.LESS_THEN;
+                        condition = PatternCompiler.ECondition.LESS_THEN;
                         break;
                     case ">":
-                        condition = PatternCompiler.Condition.GREATER_THEN;
+                        condition = PatternCompiler.ECondition.GREATER_THEN;
                         break;
                 }
             }else{
-                if(t.type == TokenType.NUMERIC) {
+                if(t.type == ETokenType.NUMERIC) {
                     if(t.width > 2) {
                         throw new UnsupportedOperationException("Value to high for a byte!");
                     }
                     res.add(new PatternCompiler.PatternElement(Integer.parseUnsignedInt(t.value, 16), condition));
-                }else if(t.type == TokenType.WILDCARD) {
+                }else if(t.type == ETokenType.WILDCARD) {
                     res.add(null);
                 }
-                condition = PatternCompiler.Condition.EQUALS;
+                condition = PatternCompiler.ECondition.EQUALS;
             }
         }
         return res.toArray(new PatternCompiler.PatternElement[0]);
@@ -76,7 +76,7 @@ public class PatternTokenizer {
                 t.width = 1;
                 t.value = String.valueOf(c);
             }else{
-                t.type = TokenType.NUMERIC;
+                t.type = ETokenType.NUMERIC;
                 t.width = 2;
                 t.value = HexUtils.pad('0', 2, Integer.toUnsignedString(c & 0xFF, 16));
             }
@@ -87,13 +87,13 @@ public class PatternTokenizer {
             Token t = res.get(i);
             Token next = i + 1 < res.size() ? res.get(i + 1) : null;
             if(next != null) {
-                if (t.type == TokenType.NUMERIC && next.type == TokenType.NUMERIC && t.width < 2) {
+                if (t.type == ETokenType.NUMERIC && next.type == ETokenType.NUMERIC && t.width < 2) {
                     t.value = t.value + next.value;
                     t.width++;
                     res.remove(next);
                     i--;
                 }
-                else if(t.type == TokenType.WILDCARD && next.type == TokenType.WILDCARD && t.width < 2) {
+                else if(t.type == ETokenType.WILDCARD && next.type == ETokenType.WILDCARD && t.width < 2) {
                     t.width++;
                     res.remove(next);
                     i--;
@@ -101,24 +101,24 @@ public class PatternTokenizer {
             }
         }
 
-        res.removeIf(t -> t.type == TokenType.WHITESPACE);
+        res.removeIf(t -> t.type == ETokenType.WHITESPACE);
         return res;
     }
 
-    private TokenType getType(char c) {
+    private ETokenType getType(char c) {
         if(Character.isWhitespace(c)) {
-            return TokenType.WHITESPACE;
+            return ETokenType.WHITESPACE;
         }
         if(c >= '0' && c <= '9' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z') {
-            return TokenType.NUMERIC;
+            return ETokenType.NUMERIC;
         }
         switch(c){
             case '<':
             case '>':
             case '!':
-                return TokenType.OPERATOR;
+                return ETokenType.OPERATOR;
             case '?':
-                return TokenType.WILDCARD;
+                return ETokenType.WILDCARD;
             default:
                 throw new UnsupportedOperationException("unsupported/invalid char:" + c);
         }

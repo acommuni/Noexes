@@ -33,6 +33,16 @@ public abstract class AOpCode {
 
     public abstract String abstractInstruction();
 
+    /**
+     * Explication en langage clair de l'instruction, pour expliquer un cheat venu d'ailleurs
+     * (ex: un fichier cheatdb). Par défaut : l'instruction abstraite si elle existe, sinon toString.
+     * Les sous-classes redéfinissent pour une vraie phrase.
+     */
+    public String explain() {
+        String abs = abstractInstruction();
+        return (abs != null && !abs.isBlank()) ? abs : toString();
+    }
+
     public String toString() {
         return ReflectionToStringBuilder.toString(this, ToStringStyle.SHORT_PREFIX_STYLE, false);
     }

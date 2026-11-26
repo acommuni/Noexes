@@ -27,7 +27,7 @@ import me.mdbell.noexs.code.opcode.annotation.AOpCodeMask;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodeOperation;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodePadded;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodePattern;
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 import me.mdbell.noexs.code.opcode.model.ICodeFragment;
 import me.mdbell.noexs.code.opcode.model.ICodeFragmentMask;
 import me.mdbell.noexs.code.opcode.model.ICodeFragmentWithVariableLength;
@@ -132,18 +132,16 @@ public class OpCodeOperation {
         StringBuilder res = null;
         try {
             res = new StringBuilder(operation.getCodeType());
-            EDataType dataType = null;
+            EOpCodeDataType dataType = null;
             for (OpCodeOperationFragment operationFragment : operationFragments) {
                 Object fieldValue = FieldUtils.readField(operationFragment.getField(), decodedOperation, true);
-                if (fieldValue instanceof EDataType) {
-                    dataType = (EDataType) fieldValue;
+                if (fieldValue instanceof EOpCodeDataType dt) {
+                    dataType = dt;
                 }
-                if (fieldValue instanceof ICodeFragment) {
-                    ICodeFragment cf = (ICodeFragment) fieldValue;
+                if (fieldValue instanceof ICodeFragment cf) {
                     res.append(cf.encode());
-                } else if (fieldValue instanceof ICodeFragmentWithVariableLength) {
-                    ICodeFragmentWithVariableLength cf = (ICodeFragmentWithVariableLength) fieldValue;
-                    EDataType valueType = dataType;
+                } else if (fieldValue instanceof ICodeFragmentWithVariableLength cf) {
+                    EOpCodeDataType valueType = dataType;
                     AOpCodeFixValueSize valueTypeAnno = operationFragment.getField()
                             .getAnnotation(AOpCodeFixValueSize.class);
                     if (valueTypeAnno != null) {

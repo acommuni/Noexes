@@ -73,12 +73,7 @@ public class DebuggerUtils {
                 EFormatRecord efr = aff.value();
                 formatedValue = efr.getTransformer().apply(value);
             } else {
-                if (type == byte.class) {
-                    formatedValue = ((Byte) value) & 0xFFL;
-                } else if (type == byte[].class && value != null) {
-                    // byte[] : loggé comme une chaîne UTF-8 (ex: message de 0x33), pas octet par octet
-                    formatedValue = "\"" + new String((byte[]) value, StandardCharsets.UTF_8) + "\"";
-                }
+                formatedValue = formatForLog(type, value);
             }
 
             logger.debug("Field Read : {}->{}:{}={}", rc.getName(), rc.getType(), dt, formatedValue);
@@ -104,7 +99,6 @@ public class DebuggerUtils {
                     Class<?> componentType = type.componentType();
                     int length = fieldValue == null ? 0 : Array.getLength(fieldValue);
                     connection.writeInt(length);
-                    boolean logAsString = componentType == byte.class; // byte[] loggé comme chaîne UTF-8
                     for (int i = 0; i < length; i++) {
                         Object element = Array.get(fieldValue, i);
                         if (Record.class.isAssignableFrom(componentType)) {
@@ -115,23 +109,59 @@ public class DebuggerUtils {
                             EDebDataType dt = EDebDataType.getDatatype(componentType);
                             dt.getWriteValueMethod().accept(connection, element);
                         }
-                        if (!logAsString) {
-                            logger.debug("Field Write : {}[{}]={}", rc.getName(), i, element);
-                        }
                     }
-                    if (logAsString) {
-                        logger.debug("Field Write : {}->byte[{}]=\"{}\"", rc.getName(), length,
-                                fieldValue == null ? "" : new String((byte[]) fieldValue, StandardCharsets.UTF_8));
-                    }
+                    // tableau loggé en UNE ligne dissectée (byte[] -> chaîne UTF-8, long[] -> [0x.., ...])
+                    logger.debug("Field Write : {}->{}={}", rc.getName(), type, formatForLog(type, fieldValue));
                 } else {
                     EDebDataType dt = EDebDataType.getDatatype(type);
                     dt.getWriteValueMethod().accept(connection, fieldValue);
-                    logger.debug("Field Write : {}->{}:{}={}", rc.getName(), type, dt, fieldValue);
+                    logger.debug("Field Write : {}->{}:{}={}", rc.getName(), type, dt, formatForLog(type, fieldValue));
                 }
             }
         } catch (Throwable e) {
             logger.error("Error while writing value", e);
         }
+    }
+
+    /**
+     * Formate une valeur de champ pour le log de protocole (dissection lisible, pas la valeur brute) :
+     * long -> 0x… (hex), byte -> non signé, long[] -> [0x.., 0x..] tronqué à 8 éléments,
+     * byte[] -> chaîne UTF-8 entre guillemets, autres tableaux de records -> deepToString.
+     */
+    private static Object formatForLog(Class<?> type, Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (type == byte.class) {
+            return ((Byte) value) & 0xFFL;
+        }
+        if (type == long.class) {
+            return "0x" + Long.toHexString((Long) value).toUpperCase();
+        }
+        if (type == long[].class) {
+            long[] a = (long[]) value;
+            int n = Math.min(a.length, 8);
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < n; i++) {
+                if (i > 0) sb.append(", ");
+                sb.append("0x").append(Long.toHexString(a[i]).toUpperCase());
+            }
+            if (a.length > n) {
+                sb.append(", ... +").append(a.length - n);
+            }
+            return sb.append(']').toString();
+        }
+        if (type == byte[].class) {
+            return "\"" + new String((byte[]) value, StandardCharsets.UTF_8) + "\"";
+        }
+        if (type == String.class) {
+            // chaîne (ex: version du protocole envoyée dans 0x33 LOG_MESSAGE) : entre guillemets
+            return "\"" + value + "\"";
+        }
+        if (type.isArray() && !type.componentType().isPrimitive()) {
+            return java.util.Arrays.deepToString((Object[]) value);
+        }
+        return value;
     }
 
     public static <T extends Record> T runCommand(IConnection connection, EDebCommand command, Object input) {

@@ -4,92 +4,41 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import me.mdbell.noexs.ui.models.ConversionType;
+import me.mdbell.noexs.ui.models.EConversionType;
 import me.mdbell.util.HexUtils;
 
 public class ConversionUtils {
 
     private static final Logger logger = LogManager.getLogger(ConversionUtils.class);
 
-    public static Long sourceToLong(ConversionType convType, String rawValue) {
-        Long res = null;
-
+    public static Long sourceToLong(EConversionType convType, String rawValue) {
+        // Les 2 anciens switch (hex radix 16 / décimal radix 10) étaient identiques à la base près :
+        // factorisés en une seule switch expression (Java 14+) avec radix en paramètre.
         if (StringUtils.startsWithIgnoreCase(rawValue, "0x")) {
-            String value = StringUtils.trim(StringUtils.removeStartIgnoreCase(rawValue, "0x"));
-            switch (convType) {
-                case FLT:
-                    Float f = Float.intBitsToFloat(Integer.parseUnsignedInt(value, 16));
-                    res = (long) Float.floatToIntBits(f);
-                    break;
-                case U8:
-                    res = (long) Byte.parseByte(value, 16);
-                    break;
-                case U16:
-                    res = (long) Short.parseShort(value, 16);
-                    break;
-                case U32:
-                    res = (long) Integer.parseUnsignedInt(value, 16);
-                    break;
-                case U64:
-                    res = Long.parseUnsignedLong(value, 16);
-                    break;
-                case S8:
-                    res = (long) Byte.parseByte(value, 16);
-                    break;
-                case S16:
-                    res = (long) Short.parseShort(value, 16);
-                    break;
-                case S32:
-                    res = (long) Integer.parseInt(value, 16);
-                    break;
-                case S64:
-                    res = Long.parseLong(value, 16);
-                    break;
-                default:
-                    logger.error("Conversion type not supported : {}", convType);
-                    break;
-            }
-        } else {
-            String value = StringUtils.trim(rawValue);
-            switch (convType) {
-                case FLT:
-                    Float f = Float.parseFloat(value);
-                    res = (long) Float.floatToIntBits(f);
-                    break;
-                case U8:
-                    res = (long) Byte.parseByte(value);
-                    break;
-                case U16:
-                    res = (long) Short.parseShort(value);
-                    break;
-                case U32:
-                    res = (long) Integer.parseUnsignedInt(value);
-                    break;
-                case U64:
-                    res = Long.parseUnsignedLong(value);
-                    break;
-                case S8:
-                    res = (long) Byte.parseByte(value);
-                    break;
-                case S16:
-                    res = (long) Short.parseShort(value);
-                    break;
-                case S32:
-                    res = (long) Integer.parseInt(value);
-                    break;
-                case S64:
-                    res = Long.parseLong(value);
-                    break;
-                default:
-                    logger.error("Conversion type not supported : {}", convType);
-                    break;
-            }
+            return parseValue(convType, StringUtils.trim(StringUtils.removeStartIgnoreCase(rawValue, "0x")), 16);
         }
-
-        return res;
+        return parseValue(convType, StringUtils.trim(rawValue), 10);
     }
 
-    public static String longToString(ConversionType convTypeSource, ConversionType convTypeDest, long value,
+    private static Long parseValue(EConversionType convType, String value, int radix) {
+        return switch (convType) {
+            case FLT -> radix == 16
+                    ? (long) Float.floatToIntBits(Float.intBitsToFloat(Integer.parseUnsignedInt(value, 16)))
+                    : (long) Float.floatToIntBits(Float.parseFloat(value));
+            case U8, S8 -> (long) Byte.parseByte(value, radix);
+            case U16, S16 -> (long) Short.parseShort(value, radix);
+            case U32 -> (long) Integer.parseUnsignedInt(value, radix);
+            case S32 -> (long) Integer.parseInt(value, radix);
+            case U64 -> Long.parseUnsignedLong(value, radix);
+            case S64 -> Long.parseLong(value, radix);
+            default -> {
+                logger.error("Conversion type not supported : {}", convType);
+                yield null;
+            }
+        };
+    }
+
+    public static String longToString(EConversionType convTypeSource, EConversionType convTypeDest, long value,
             boolean hex, boolean hexPrefix) {
         String res = null;
         if (hex) {
@@ -98,7 +47,7 @@ public class ConversionUtils {
             switch (convTypeDest) {
                 case FLT:
                     Float f = null;
-                    if (convTypeSource == ConversionType.FLT) {
+                    if (convTypeSource == EConversionType.FLT) {
                         conv = Long.toHexString(value);
                     } else {
                         f = (float) value;
@@ -135,7 +84,7 @@ public class ConversionUtils {
             switch (convTypeDest) {
                 case FLT:
                     Float f = null;
-                    if (convTypeSource == ConversionType.FLT) {
+                    if (convTypeSource == EConversionType.FLT) {
                         f = Float.intBitsToFloat((int) value);
                     } else {
                         f = (float) value;

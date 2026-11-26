@@ -2,28 +2,28 @@ package me.mdbell.noexs.code.model;
 
 import org.apache.commons.lang3.StringUtils;
 
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 
 public enum EValueType {
-    U8(EDataType.T8),
-    S8(EDataType.T8),
-    U16(EDataType.T16),
-    S16(EDataType.T16),
-    U32(EDataType.T32),
-    S32(EDataType.T32),
-    U64(EDataType.T64),
-    S64(EDataType.T64),
-    FLT(EDataType.T32),
-    DBL(EDataType.T64),
-    PTR(EDataType.ADDR);
+    U8(EOpCodeDataType.T8),
+    S8(EOpCodeDataType.T8),
+    U16(EOpCodeDataType.T16),
+    S16(EOpCodeDataType.T16),
+    U32(EOpCodeDataType.T32),
+    S32(EOpCodeDataType.T32),
+    U64(EOpCodeDataType.T64),
+    S64(EOpCodeDataType.T64),
+    FLT(EOpCodeDataType.T32),
+    DBL(EOpCodeDataType.T64),
+    PTR(EOpCodeDataType.ADDR);
 
-    private EDataType dataType;
+    private EOpCodeDataType dataType;
 
-    private EValueType(EDataType dataType) {
+    private EValueType(EOpCodeDataType dataType) {
         this.dataType = dataType;
     }
 
-    public EDataType getDataType() {
+    public EOpCodeDataType getDataType() {
         return dataType;
     }
 

@@ -4,17 +4,17 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 
 public class OperationUtils {
 
     private static final Logger logger = LogManager.getLogger(OperationUtils.class);
 
-    public static String padHexValue(String hexValue, EDataType dataType) {
+    public static String padHexValue(String hexValue, EOpCodeDataType dataType) {
         return padHexValue(hexValue, dataType, null);
     }
 
-    public static String padHexValue(String hexValue, EDataType dataType, Integer forceGabarit) {
+    public static String padHexValue(String hexValue, EOpCodeDataType dataType, Integer forceGabarit) {
 
         int digit = dataType.getGabarit();
         if (forceGabarit != null) {

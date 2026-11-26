@@ -22,14 +22,14 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.AnchorPane;
 import me.mdbell.javafx.control.FormattedTableCell;
 import me.mdbell.noexs.core.Debugger;
-import me.mdbell.noexs.core.DebuggerStatus;
+import me.mdbell.noexs.core.EDebuggerStatus;
 import me.mdbell.noexs.core.EMemoryRegion;
 import me.mdbell.noexs.core.MemoryInfo;
-import me.mdbell.noexs.core.MemoryType;
+import me.mdbell.noexs.core.EMemoryType;
 import me.mdbell.noexs.core.Result;
 import me.mdbell.noexs.misc.ExpressionEvaluator;
 import me.mdbell.noexs.ui.menus.MemoryInfoContextMenu;
-import me.mdbell.noexs.ui.models.DataType;
+import me.mdbell.noexs.ui.models.EDataType;
 import me.mdbell.noexs.ui.models.EAccessType;
 import me.mdbell.noexs.ui.models.MemoryInfoTableModel;
 import me.mdbell.noexs.ui.models.MemoryInfoUtils;
@@ -53,7 +53,7 @@ public class ToolsController implements IController {
     @FXML
     TableColumn<MemoryInfoTableModel, Number> memInfoSize;
     @FXML
-    TableColumn<MemoryInfoTableModel, MemoryType> memInfoType;
+    TableColumn<MemoryInfoTableModel, EMemoryType> memInfoType;
     @FXML
     TableColumn<MemoryInfoTableModel, Number> memInfoPerm;
 
@@ -85,7 +85,7 @@ public class ToolsController implements IController {
         if (!debugger.connected()) {
             return 0;
         }
-        return debugger.peek(DataType.LONG, addr);
+        return debugger.peek(EDataType.LONG, addr);
     });
 
     @FXML
@@ -207,7 +207,7 @@ public class ToolsController implements IController {
 
                 if (attachOk) {
 
-                    DebuggerStatus dbgSt = conn.getStatus();
+                    EDebuggerStatus dbgSt = conn.getStatus();
 
                     String status = "Attached to process pid : " + selectedPid + " [" + dbgSt + "]";
                     if (attachAlreadyDone) {
@@ -261,7 +261,7 @@ public class ToolsController implements IController {
         int moduleCount = 0;
 
         for (MemoryInfo m : info) {
-            if (m.getType() == MemoryType.CODE_STATIC && m.getPerm() == 0b101) {
+            if (m.getType() == EMemoryType.CODE_STATIC && m.getPerm() == 0b101) {
                 moduleCount++;
             }
         }
@@ -270,17 +270,17 @@ public class ToolsController implements IController {
         EMemoryRegion region = null;
         for (MemoryInfo m : info) {
             String name = "-";
-            if (m.getType() == MemoryType.HEAP && !heap) {
+            if (m.getType() == EMemoryType.HEAP && !heap) {
                 heap = true;
                 name = "heap";
                 region = EMemoryRegion.HEAP;
             }
-            if (m.getType() == MemoryType.HEAP) {
+            if (m.getType() == EMemoryType.HEAP) {
                 region = EMemoryRegion.HEAP;
             } else if (region == EMemoryRegion.HEAP) {
                 region = null;
             }
-            if (m.getType() == MemoryType.CODE_STATIC && m.getPerm() == 0b101) {
+            if (m.getType() == EMemoryType.CODE_STATIC && m.getPerm() == 0b101) {
                 if (mod == 0 && moduleCount == 1) {
                     name = "main";
                     region = EMemoryRegion.MAIN;
@@ -309,7 +309,7 @@ public class ToolsController implements IController {
             if (!name.equals("-")) {
                 vars.put(name, m.getAddress());
             }
-            if (m.getType() != MemoryType.UNMAPPED) {
+            if (m.getType() != EMemoryType.UNMAPPED) {
                 memoryInfoList.add(new MemoryInfoTableModel(name, m, region));
             }
         }
@@ -387,7 +387,7 @@ public class ToolsController implements IController {
             mc.search().setSearchRange(range2.getStart(), range2.getEnd());
         }
         if (switchTab) {
-            mc.setTab(MainController.Tab.SEARCH);
+            mc.setTab(MainController.ETab.SEARCH);
         }
     }
 

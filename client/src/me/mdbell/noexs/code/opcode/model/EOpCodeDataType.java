@@ -10,14 +10,14 @@ import me.mdbell.noexs.code.opcode.annotation.AOpCodePattern;
  *
  */
 @AOpCodePattern(pattern = "[1248]")
-public enum EDataType implements ICodeFragment {
+public enum EOpCodeDataType implements ICodeFragment {
     T8(1, 2, 8), T16(2, 4, 8), T32(4, 8, 8), T64(8, 16, 16), ADDR(8, 10, 10);
 
     private int dataTypeCode;
     private int size;
     private int gabarit;
 
-    private EDataType(int dataTypeCode, int size, int gabarit) {
+    private EOpCodeDataType(int dataTypeCode, int size, int gabarit) {
         this.dataTypeCode = dataTypeCode;
         this.gabarit = gabarit;
         this.size = size;
@@ -36,9 +36,9 @@ public enum EDataType implements ICodeFragment {
     }
 
     @AOpCodeFragmentConversion
-    public static EDataType valueFromFragment(String fragment) {
-        EDataType res = null;
-        for (EDataType dt : EDataType.values()) {
+    public static EOpCodeDataType valueFromFragment(String fragment) {
+        EOpCodeDataType res = null;
+        for (EOpCodeDataType dt : EOpCodeDataType.values()) {
             if (dt.dataTypeCode == Integer.parseInt(fragment)) {
                 res = dt;
                 break;

@@ -24,7 +24,7 @@ import me.mdbell.noexs.code.opcode.OpCode6StoreStaticValueToRegisterMemoryAddres
 import me.mdbell.noexs.code.opcode.OpCode7LegacyArithmetic;
 import me.mdbell.noexs.code.opcode.OpCode8BeginKeypressConditionalBlock;
 import me.mdbell.noexs.code.opcode.OpCodeLabel;
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 import me.mdbell.noexs.code.parser.CodeLexer;
 import me.mdbell.noexs.code.parser.CodeParser;
 import me.mdbell.noexs.code.parser.CodeParser.CodesContext;
@@ -85,24 +85,19 @@ public class CheatCodeMaker {
         CodeLines res = new CodeLines();
         List<IInstruction> instructions = block.getInstructions();
         for (IInstruction instruction : instructions) {
-            if (instruction instanceof WriteValue) {
-                res.addCodeLines(generateInstructionWriteValue((WriteValue) instruction));
+            // pattern matching for instanceof (Java 16+) : plus de cast
+            // (en Java 21+ : switch (instruction) { case WriteValue wv -> ...; })
+            if (instruction instanceof WriteValue wv) {
+                res.addCodeLines(generateInstructionWriteValue(wv));
             } else if (instruction instanceof EndCondition) {
                 res.addLineToEnd(OpCode2EndConditionalBlock.endConditionalEnd());
             } else if (instruction instanceof ElseCondition) {
                 res.addLineToEnd(OpCode2EndConditionalBlock.endConditionalElse());
-            } else if (instruction instanceof ConditionPressButton) {
-                res.addLineToEnd(OpCode8BeginKeypressConditionalBlock
-                        .beginKeypressConditionalBlock(((ConditionPressButton) instruction).getKeypad()));
+            } else if (instruction instanceof ConditionPressButton cpb) {
+                res.addLineToEnd(OpCode8BeginKeypressConditionalBlock.beginKeypressConditionalBlock(cpb.getKeypad()));
             } else {
                 logger.warn("Unknown instruction : {}", instruction);
-
             }
-
-            /**
-             * CodeLines codeLines = switch (instruction) { case WriteValue wv
-             * ->generateInstructionWriteValue(WriteValue wv); }
-             **/
         }
         return res;
     }
@@ -137,11 +132,11 @@ public class CheatCodeMaker {
         OpCode5LoadRegisterWithMemory res = null;
 
         if (positionTypeFirst) {
-            res = OpCode5LoadRegisterWithMemory.loadFromRegisterAddressEncoding(EDataType.T64,
+            res = OpCode5LoadRegisterWithMemory.loadFromRegisterAddressEncoding(EOpCodeDataType.T64,
                     p.getInheritedMemoryRegion(), registerToUse, p.getOffset());
 
         } else {
-            res = OpCode5LoadRegisterWithMemory.loadFromFixedAddressEncoding(EDataType.T64, registerToUse,
+            res = OpCode5LoadRegisterWithMemory.loadFromFixedAddressEncoding(EOpCodeDataType.T64, registerToUse,
                     p.getOffset());
         }
 
@@ -149,7 +144,7 @@ public class CheatCodeMaker {
     }
 
     private OpCode7LegacyArithmetic generatePointerMove(Pointer p) {
-        return OpCode7LegacyArithmetic.legacyArithmetic(EDataType.T32, registerToUse, p.getArithmeticOperation(),
+        return OpCode7LegacyArithmetic.legacyArithmetic(EOpCodeDataType.T32, registerToUse, p.getArithmeticOperation(),
                 p.getOffset());
     }
 

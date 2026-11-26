@@ -35,7 +35,7 @@ import javafx.scene.layout.Priority;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import me.mdbell.noexs.core.Debugger;
-import me.mdbell.noexs.core.DebuggerStatus;
+import me.mdbell.noexs.core.EDebuggerStatus;
 import me.mdbell.noexs.core.IConnection;
 import me.mdbell.noexs.core.Result;
 import me.mdbell.noexs.io.net.NetworkConstants;
@@ -44,14 +44,14 @@ import me.mdbell.noexs.misc.NopConnection;
 import me.mdbell.noexs.misc.ResultDecoder;
 import me.mdbell.noexs.ui.NoexsApplication;
 import me.mdbell.noexs.ui.Settings;
-import me.mdbell.noexs.ui.models.ConnectionType;
+import me.mdbell.noexs.ui.models.EConnectionType;
 import me.mdbell.noexs.ui.services.DebuggerConnectionService;
 
 public class MainController implements NetworkConstants, IController {
 
     private static final Logger logger = LogManager.getLogger(MainController.class);
 
-    public ChoiceBox<ConnectionType> connectionType;
+    public ChoiceBox<EConnectionType> connectionType;
     public CheckBox autoResume;
     private Debugger debugger = new Debugger(NopConnection.INSTANCE);
 
@@ -145,14 +145,14 @@ public class MainController implements NetworkConstants, IController {
 
         ipAddr.setText(Settings.getConnectionHost());
 
-        connectionType.getItems().addAll(ConnectionType.values());
+        connectionType.getItems().addAll(EConnectionType.values());
 
-        ConnectionType cnxType = ConnectionType.NETWORK;
+        EConnectionType cnxType = EConnectionType.NETWORK;
         try {
             logger.debug("Try to find switch on USB");
             if (UsbUtils.findSwitch() != null) {
                 logger.debug("Found switch on USB, connexionType set to USB");
-                cnxType = ConnectionType.USB;
+                cnxType = EConnectionType.USB;
             }
         } catch (UsbException e) {
             logger.error("Unexpected error", e);
@@ -160,7 +160,7 @@ public class MainController implements NetworkConstants, IController {
 
         connectionType.getSelectionModel().select(cnxType); // TODO save/store this
         connectionType.getSelectionModel().selectedItemProperty()
-                .addListener((observable, oldValue, newValue) -> ipAddr.setDisable(newValue != ConnectionType.NETWORK));
+                .addListener((observable, oldValue, newValue) -> ipAddr.setDisable(newValue != EConnectionType.NETWORK));
 
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -206,7 +206,7 @@ public class MainController implements NetworkConstants, IController {
 
         setStatus("Connected. Current pid : " + currentPid + " Attached pid : " + attachedPid);
 
-        DebuggerStatus status = debugger.getStatus();
+        EDebuggerStatus status = debugger.getStatus();
         setTitle(status.getStatus());
 
         // Log côté serveur (commande 0x33, serveur >= 1.1.160) : marqueur de connexion avec date
@@ -264,20 +264,12 @@ public class MainController implements NetworkConstants, IController {
         }
         String message = infoMessage + sb.toString();
         showMessage(message, alertType);
-        Level messageLevel = Level.INFO;
-        switch (alertType) {
-            case ERROR:
-                messageLevel = Level.ERROR;
-                break;
-            case CONFIRMATION:
-            case INFORMATION:
-            case NONE:
-                messageLevel = Level.INFO;
-                break;
-            case WARNING:
-                messageLevel = Level.WARN;
-                break;
-        }
+        // switch expression (Java 14+) : un seul niveau, plus de break
+        Level messageLevel = switch (alertType) {
+            case ERROR -> Level.ERROR;
+            case WARNING -> Level.WARN;
+            case CONFIRMATION, INFORMATION, NONE -> Level.INFO;
+        };
         logger.log(messageLevel, "Show message : {}", message);
 
     }
@@ -286,24 +278,13 @@ public class MainController implements NetworkConstants, IController {
         Platform.runLater(() -> {
             Alert alert = new Alert(alertType);
             alert.setTitle(NoexsApplication.APP_NAME);
-            String header = null;
-            switch (alertType) {
-                case NONE:
-                    header = "";
-                    break;
-                case INFORMATION:
-                    header = "Info";
-                    break;
-                case WARNING:
-                    header = "Warning";
-                    break;
-                case CONFIRMATION:
-                    header = "Confirmation";
-                    break;
-                case ERROR:
-                    header = "Error";
-                    break;
-            }
+            String header = switch (alertType) {
+                case NONE -> "";
+                case INFORMATION -> "Info";
+                case WARNING -> "Warning";
+                case CONFIRMATION -> "Confirmation";
+                case ERROR -> "Error";
+            };
             alert.setHeaderText(header);
             alert.setContentText(infoMessage);
             alert.showAndWait();
@@ -431,7 +412,7 @@ public class MainController implements NetworkConstants, IController {
             setStatus("Unable to Connect!");
             setConnectBtnText("Connect");
             connectionType.setDisable(false);
-            ipAddr.setDisable(connectionType.getSelectionModel().getSelectedItem() != ConnectionType.NETWORK);
+            ipAddr.setDisable(connectionType.getSelectionModel().getSelectedItem() != EConnectionType.NETWORK);
         });
 
         boolean disabled = true;
@@ -473,7 +454,7 @@ public class MainController implements NetworkConstants, IController {
             setStatus("Unable to Connect!");
             setConnectBtnText("Connect");
             connectionType.setDisable(false);
-            ipAddr.setDisable(connectionType.getSelectionModel().getSelectedItem() != ConnectionType.NETWORK);
+            ipAddr.setDisable(connectionType.getSelectionModel().getSelectedItem() != EConnectionType.NETWORK);
         });
 
         boolean disabled = false;
@@ -526,12 +507,12 @@ public class MainController implements NetworkConstants, IController {
         return debugger;
     }
 
-    public void setTab(Tab tab) {
+    public void setTab(ETab tab) {
         tabs.getSelectionModel().select(tab.ordinal());
     }
 
-    public Tab getCurrentTab() {
-        return Tab.values()[tabs.getSelectionModel().getSelectedIndex()];
+    public ETab getCurrentTab() {
+        return ETab.values()[tabs.getSelectionModel().getSelectedIndex()];
     }
 
     public SearchController search() {
@@ -554,7 +535,7 @@ public class MainController implements NetworkConstants, IController {
         return stage;
     }
 
-    public enum Tab {
+    public enum ETab {
         TOOLS, SEARCH, POINTER_SEARCH, MEMORY_VIEWER, WATCH_LIST, DISASSEMBLER, USB, CHEATS
     }
 }

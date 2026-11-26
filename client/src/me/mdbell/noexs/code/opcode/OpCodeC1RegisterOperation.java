@@ -81,4 +81,21 @@ public class OpCodeC1RegisterOperation extends AOpCode {
         return strB.toString();
     }
 
+    @Override
+    public String explain() {
+        switch (registerOperation) {
+            case SAVE:
+                return "Sauvegarde la valeur du registre R" + registerSource.getRegister() + " (restaurable plus tard)";
+            case RESTORE:
+                return "Restaure dans R" + registerDestination.getRegister() + " la valeur sauvegardée de R"
+                        + registerSource.getRegister();
+            case CLEAR_SAVED_VALUE:
+                return "Efface la valeur sauvegardée de R" + registerSource.getRegister();
+            case CLEAR_REGISTER:
+                return "Met à zéro le registre R" + registerDestination.getRegister();
+            default:
+                return toString();
+        }
+    }
+
 }

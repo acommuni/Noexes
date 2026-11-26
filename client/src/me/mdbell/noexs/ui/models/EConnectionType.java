@@ -1,12 +1,12 @@
 package me.mdbell.noexs.ui.models;
 
-public enum ConnectionType {
+public enum EConnectionType {
 
     USB(1), NETWORK(10);
 
     private int maxConnectionFailureCount;
 
-    ConnectionType(int maxConnectionFailureCount) {
+    EConnectionType(int maxConnectionFailureCount) {
         this.maxConnectionFailureCount = maxConnectionFailureCount;
     }
 

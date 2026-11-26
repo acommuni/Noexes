@@ -35,7 +35,7 @@ public class MemoryInfoContextMenu extends ContextMenu {
                 return;
             }
             mc.get().search().setSearchRange(model.getAddr(), model.getEnd());
-            mc.get().setTab(MainController.Tab.SEARCH);
+            mc.get().setTab(MainController.ETab.SEARCH);
         });
         searchStart.setOnAction(event -> {
             MemoryInfoTableModel model = memInfoTable.getSelectionModel().getSelectedItem();
@@ -61,7 +61,7 @@ public class MemoryInfoContextMenu extends ContextMenu {
             if (range != null) {
                 mc.get().search().setSearchRange(range.getStart(), range.getEnd());
             }
-            mc.get().setTab(MainController.Tab.SEARCH);
+            mc.get().setTab(MainController.ETab.SEARCH);
         });
 
         mainHeapSearchAuto.setOnAction(event -> {
@@ -105,7 +105,7 @@ public class MemoryInfoContextMenu extends ContextMenu {
             }
             mc.get().pointer().setFilterMin(model.getAddr());
             mc.get().pointer().setFilterMax(model.getEnd());
-            mc.get().setTab(MainController.Tab.POINTER_SEARCH);
+            mc.get().setTab(MainController.ETab.POINTER_SEARCH);
         });
 
         ptrFilterStart.setOnAction(event -> {
@@ -137,7 +137,7 @@ public class MemoryInfoContextMenu extends ContextMenu {
                 return;
             }
             mc.get().memory().setViewAddress(model.getAddr());
-            mc.get().setTab(MainController.Tab.MEMORY_VIEWER);
+            mc.get().setTab(MainController.ETab.MEMORY_VIEWER);
 
         });
         disassembler.setOnAction(event -> {
@@ -146,7 +146,7 @@ public class MemoryInfoContextMenu extends ContextMenu {
                 return;
             }
             mc.get().disassembly().setDisassembleAddress(model.getAddr());
-            mc.get().setTab(MainController.Tab.DISASSEMBLER);
+            mc.get().setTab(MainController.ETab.DISASSEMBLER);
         });
         getItems().addAll(searchBoth, searchStart, searchEnd, mainsearchAuto, heapsearchAuto, mainHeapSearchAuto,
                 mainsearchStart, mainsearchEnd, ptrMainAuto, ptrMain, ptrFilter, ptrFilterStart, ptrFilterEnd,

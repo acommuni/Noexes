@@ -23,6 +23,11 @@ public class OpCodeLabel extends AOpCode {
         return "\"" + stringValue + "\"";
     }
 
+    @Override
+    public String explain() {
+        return "Section « " + stringValue.getStringValue() + " »";
+    }
+
     public static OpCodeLabel label(String label) {
         OpCodeLabel res = new OpCodeLabel();
         res.stringValue = new StringValue(label);

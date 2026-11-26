@@ -1,6 +1,6 @@
 package me.mdbell.noexs.ui.models;
 
-public enum ConditionType {
+public enum EConditionType {
     EQUALS("Equals", "=="),
     NOT_EQUAL("Not Equal", "!="),
     LESS_THAN("Less Than", "<"),
@@ -9,7 +9,7 @@ public enum ConditionType {
     GREATER_OR_EQUAL("Greater or Equal", ">=");
     String str, operator;
 
-    ConditionType(String str, String operator) {
+    EConditionType(String str, String operator) {
         this.str = str;
         this.operator = operator;
     }

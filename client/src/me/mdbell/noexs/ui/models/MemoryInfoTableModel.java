@@ -8,7 +8,7 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import me.mdbell.noexs.core.EMemoryRegion;
 import me.mdbell.noexs.core.MemoryInfo;
-import me.mdbell.noexs.core.MemoryType;
+import me.mdbell.noexs.core.EMemoryType;
 
 public class MemoryInfoTableModel {
 
@@ -16,7 +16,7 @@ public class MemoryInfoTableModel {
     private SimpleLongProperty addr;
     private SimpleLongProperty size;
     private NumberBinding end;
-    private SimpleObjectProperty<MemoryType> type;
+    private SimpleObjectProperty<EMemoryType> type;
     private SimpleIntegerProperty access;
     private EMemoryRegion memoryRegion;
 
@@ -54,7 +54,7 @@ public class MemoryInfoTableModel {
         return end;
     }
 
-    public SimpleObjectProperty<MemoryType> typeProperty() {
+    public SimpleObjectProperty<EMemoryType> typeProperty() {
         return type;
     }
 

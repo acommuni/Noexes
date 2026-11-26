@@ -6,8 +6,8 @@ import java.util.List;
 import org.apache.commons.lang3.RegExUtils;
 import org.apache.commons.lang3.StringUtils;
 
-import me.mdbell.noexs.code.opcode.model.EDataType;
-import me.mdbell.noexs.ui.models.DataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
+import me.mdbell.noexs.ui.models.EDataType;
 import me.mdbell.noexs.ui.models.EAccessType;
 
 public class HexUtils {
@@ -40,7 +40,7 @@ public class HexUtils {
         return pad('0', 8, Long.toUnsignedString(value, 16).toUpperCase());
     }
 
-    public static String format(DataType dataType, long value, boolean hexPrefix) {
+    public static String format(EDataType dataType, long value, boolean hexPrefix) {
         String res = pad('0', dataType.getSize(), Long.toUnsignedString(value, 16).toUpperCase());
         if (hexPrefix) {
             res = "0x" + res;
@@ -48,7 +48,7 @@ public class HexUtils {
         return res;
     }
 
-    public static String format(EDataType dataType, long value, boolean hexPrefix) {
+    public static String format(EOpCodeDataType dataType, long value, boolean hexPrefix) {
         String res = pad('0', dataType.getDataTypeSize(), Long.toUnsignedString(value, 16).toUpperCase());
         if (hexPrefix) {
             res = "0x" + res;
@@ -56,7 +56,7 @@ public class HexUtils {
         return res;
     }
 
-    public static long readFromString(DataType dataType, String value) {
+    public static long readFromString(EDataType dataType, String value) {
         return Long.parseLong(StringUtils.removeStartIgnoreCase(value, "0x"), 16);
 
     }

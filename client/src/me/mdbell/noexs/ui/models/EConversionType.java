@@ -1,6 +1,6 @@
 package me.mdbell.noexs.ui.models;
 
-public enum ConversionType {
+public enum EConversionType {
     U8("Unsigned 8", 1),
     U16("Unsigned 16", 2),
     U32("Unsigned 32", 4),
@@ -15,7 +15,7 @@ public enum ConversionType {
     String readable;
     int length;
 
-    ConversionType(String str, int length) {
+    EConversionType(String str, int length) {
         this.readable = str;
         this.length = length;
     }

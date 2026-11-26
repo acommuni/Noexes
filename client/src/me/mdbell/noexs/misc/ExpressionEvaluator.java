@@ -16,13 +16,13 @@ public class ExpressionEvaluator {
         long get(long addr);
     }
 
-    private enum Type {
+    private enum EType {
         DEREF_START, DEREF_END, ARITHMETIC, CONSTANT, WHITESPACE, VARIABLE
     }
 
     private class Token {
         Token prev, next;
-        Type type;
+        EType type;
         Object value;
 
         @Override
@@ -140,14 +140,14 @@ public class ExpressionEvaluator {
             }
         }
         //remove whitespace
-        res.removeIf(t -> t.type == Type.WHITESPACE);
+        res.removeIf(t -> t.type == EType.WHITESPACE);
 
         //make number types actually numbers
         res.forEach(t -> {
-            if (t.type == Type.VARIABLE) {
+            if (t.type == EType.VARIABLE) {
                 try {
                     t.value = Long.parseLong((String) t.value, 16);
-                    t.type = Type.CONSTANT;
+                    t.type = EType.CONSTANT;
                 } catch (NumberFormatException ignored) {
                 }
             }
@@ -171,7 +171,7 @@ public class ExpressionEvaluator {
         }
         Token curr = tokens.get(index);
         Token next = tokens.get(index + 1);
-        if (curr.type != Type.VARIABLE || next.type != Type.VARIABLE) {
+        if (curr.type != EType.VARIABLE || next.type != EType.VARIABLE) {
             return false;
         }
         tokens.remove(next);
@@ -179,20 +179,20 @@ public class ExpressionEvaluator {
         return true;
     }
 
-    private Type getType(char c) {
+    private EType getType(char c) {
         if (Character.isWhitespace(c)) {
-            return Type.WHITESPACE;
+            return EType.WHITESPACE;
         }
         switch (c) {
             case '[':
-                return Type.DEREF_START;
+                return EType.DEREF_START;
             case ']':
-                return Type.DEREF_END;
+                return EType.DEREF_END;
             case '+':
             case '-':
-                return Type.ARITHMETIC;
+                return EType.ARITHMETIC;
             default:
-                return Type.VARIABLE;
+                return EType.VARIABLE;
         }
     }
 

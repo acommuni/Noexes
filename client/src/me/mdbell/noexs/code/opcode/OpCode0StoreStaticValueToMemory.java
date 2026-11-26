@@ -5,7 +5,7 @@ import me.mdbell.noexs.code.opcode.annotation.AOpCodeOperation;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodePattern;
 import me.mdbell.noexs.code.opcode.model.Address;
 import me.mdbell.noexs.code.opcode.model.ECodeMemoryRegion;
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 import me.mdbell.noexs.code.opcode.model.NoOp;
 import me.mdbell.noexs.code.opcode.model.Register;
 import me.mdbell.noexs.code.opcode.model.Value;
@@ -27,7 +27,7 @@ import me.mdbell.noexs.code.opcode.model.Value;
 public class OpCode0StoreStaticValueToMemory extends AOpCode {
 
     @AOpCodeFieldOrder(order = 1)
-    private EDataType dataType;
+    private EOpCodeDataType dataType;
 
     @AOpCodeFieldOrder(order = 2)
     private ECodeMemoryRegion region;
@@ -45,7 +45,7 @@ public class OpCode0StoreStaticValueToMemory extends AOpCode {
     @AOpCodeFieldOrder(order = 6)
     private Value value;
 
-    public static OpCode0StoreStaticValueToMemory storeStaticValueToMemory(EDataType dataType, ECodeMemoryRegion region,
+    public static OpCode0StoreStaticValueToMemory storeStaticValueToMemory(EOpCodeDataType dataType, ECodeMemoryRegion region,
             String register, long address, long value) {
         OpCode0StoreStaticValueToMemory res = new OpCode0StoreStaticValueToMemory();
         res.dataType = dataType;
@@ -61,6 +61,14 @@ public class OpCode0StoreStaticValueToMemory extends AOpCode {
     public String abstractInstruction() {
         // TODO Auto-generated method stub
         return null;
+    }
+
+    @Override
+    public String explain() {
+        String reg = register.getRegister();
+        return "Écrit la valeur 0x" + Long.toHexString(value.getValue()).toUpperCase() + " (" + dataType + ") à l'adresse "
+                + region.name() + " + 0x" + Long.toHexString(address.getAddress()).toUpperCase()
+                + ("0".equals(reg) ? "" : " + R" + reg);
     }
 
 }

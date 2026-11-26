@@ -61,6 +61,12 @@ public class OpCode8BeginKeypressConditionalBlock extends AOpCode {
         return null;
     }
 
+    @Override
+    public String explain() {
+        return "Début de bloc conditionnel : le bloc s'exécute si les touches " + java.util.Arrays.toString(keypads)
+                + " sont pressées";
+    }
+
     public static OpCode8BeginKeypressConditionalBlock beginKeypressConditionalBlock(EKeypad[] keypads) {
         OpCode8BeginKeypressConditionalBlock res = new OpCode8BeginKeypressConditionalBlock();
         res.keypads = keypads;

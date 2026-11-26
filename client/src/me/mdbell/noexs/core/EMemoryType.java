@@ -1,6 +1,6 @@
 package me.mdbell.noexs.core;
 
-public enum MemoryType {
+public enum EMemoryType {
     UNMAPPED(0),
     IO(0x01),
     NORMAL(0x02),
@@ -25,7 +25,7 @@ public enum MemoryType {
     CODE_WRITABLE(0x15);
 
     int type;
-    MemoryType(int type){
+    EMemoryType(int type){
         this.type = type;
     }
 
@@ -33,8 +33,8 @@ public enum MemoryType {
         return type;
     }
 
-    public static MemoryType valueof(int i) {
-        for(MemoryType t : values()) {
+    public static EMemoryType valueof(int i) {
+        for(EMemoryType t : values()) {
             if(t.getType() == i) {
                 return t;
             }

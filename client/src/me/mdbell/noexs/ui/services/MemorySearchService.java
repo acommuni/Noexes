@@ -20,7 +20,7 @@ import javafx.concurrent.Service;
 import javafx.concurrent.Task;
 import me.mdbell.noexs.core.ConnectionException;
 import me.mdbell.noexs.core.Debugger;
-import me.mdbell.noexs.core.DebuggerStatus;
+import me.mdbell.noexs.core.EDebuggerStatus;
 import me.mdbell.noexs.core.MemoryInfo;
 import me.mdbell.noexs.core.ZoneToDump;
 import me.mdbell.noexs.dump.DumpIndex;
@@ -32,10 +32,10 @@ import me.mdbell.noexs.dump.MemoryDump;
 import me.mdbell.noexs.io.MappedList;
 import me.mdbell.noexs.misc.DumpAddressList;
 import me.mdbell.noexs.ui.NoexesFiles;
-import me.mdbell.noexs.ui.models.ConditionType;
-import me.mdbell.noexs.ui.models.DataType;
-import me.mdbell.noexs.ui.models.ReadMode;
-import me.mdbell.noexs.ui.models.SearchType;
+import me.mdbell.noexs.ui.models.EConditionType;
+import me.mdbell.noexs.ui.models.EDataType;
+import me.mdbell.noexs.ui.models.EReadMode;
+import me.mdbell.noexs.ui.models.ESearchType;
 import me.mdbell.util.NetUtils;
 import me.mdbell.util.Rolling;
 import me.mdbell.util.TimeUtils;
@@ -49,10 +49,10 @@ public class MemorySearchService extends Service<SearchResult> {
 
     private DataProvider provider;
 
-    private DataType dataType;
+    private EDataType dataType;
 
-    private SearchType type;
-    private ConditionType compareType;
+    private ESearchType type;
+    private EConditionType compareType;
 
     private long knownValue;
 
@@ -61,7 +61,7 @@ public class MemorySearchService extends Service<SearchResult> {
     private String fileDumpSuffix;
 
     /** Mode de lecture mémoire pour le dump (single comp / multi uncomp / multi comp). Défaut : single. */
-    private ReadMode readMode = ReadMode.SINGLE_COMP;
+    private EReadMode readMode = EReadMode.SINGLE_COMP;
 
     public void clear() {
         logger.debug("Clear search");
@@ -81,7 +81,7 @@ public class MemorySearchService extends Service<SearchResult> {
         prevResult = null;
     }
 
-    public void setDataType(DataType type) {
+    public void setDataType(EDataType type) {
         switch (type) {
             case BYTE:
                 provider = b -> b.get() & 0xFF;
@@ -105,15 +105,15 @@ public class MemorySearchService extends Service<SearchResult> {
         this.fileDumpSuffix = fileDumpSuffix;
     }
 
-    public void setReadMode(ReadMode readMode) {
-        this.readMode = readMode == null ? ReadMode.SINGLE_COMP : readMode;
+    public void setReadMode(EReadMode readMode) {
+        this.readMode = readMode == null ? EReadMode.SINGLE_COMP : readMode;
     }
 
-    public void setType(SearchType t) {
+    public void setType(ESearchType t) {
         this.type = t;
     }
 
-    public void setCompareType(ConditionType type) {
+    public void setCompareType(EConditionType type) {
         this.compareType = type;
     }
 
@@ -225,7 +225,7 @@ public class MemorySearchService extends Service<SearchResult> {
                 // Contrat de flux identique quelle que soit la variante : la reprise zone par zone
                 // après échec fonctionne pareil (compteur en octets décompressés).
                 int written;
-                if (readMode == ReadMode.MULTI_UNCOMP) {
+                if (readMode == EReadMode.MULTI_UNCOMP) {
                     written = conn.readmemMultiToStreamRaw(batch, out); // 0x13 brut
                 } else if (conn.isJnoexsExtSupported()) {
                     written = conn.readmemMultiCompressedToStream(batch, out); // 0x32 compressé (serveur >= 1.1.158)
@@ -397,10 +397,10 @@ public class MemorySearchService extends Service<SearchResult> {
         /**
          * Mode local (0x16) : la recherche est faite côté SERVEUR (COMMAND_SEARCH_LOCAL) sur la
          * plage du supplier — aucun dump n'est créé (res.curr reste null). Le serveur ne supporte
-         * que EQ (value1) et RANGE (value1..value2) : on exige donc SearchType.KNOWN + EQUALS.
+         * que EQ (value1) et RANGE (value1..value2) : on exige donc ESearchType.KNOWN + EQUALS.
          */
         private void localSearch(long tid) throws IOException {
-            if (type != SearchType.KNOWN || compareType != ConditionType.EQUALS) {
+            if (type != ESearchType.KNOWN || compareType != EConditionType.EQUALS) {
                 throw new UnsupportedOperationException(
                         "Mode local (0x16) : seul KNOWN + EQUALS est supporté côté serveur (EQ/RANGE)");
             }
@@ -491,7 +491,7 @@ public class MemorySearchService extends Service<SearchResult> {
                 return;
             }
 
-            if (type == SearchType.UNKNOWN) {
+            if (type == ESearchType.UNKNOWN) {
                 res.addresses = new DumpAddressList(res.curr, res.dataType.getSize());
                 res.regions = res.curr.getIndicesAsRegions();
                 res.start = supplier.getStart();
@@ -590,8 +590,8 @@ public class MemorySearchService extends Service<SearchResult> {
             }
             long startOfDump = System.currentTimeMillis();
 
-            DebuggerStatus currentStatus = conn.getStatus();
-            boolean resume = currentStatus == DebuggerStatus.RUNNING;
+            EDebuggerStatus currentStatus = conn.getStatus();
+            boolean resume = currentStatus == EDebuggerStatus.RUNNING;
             logger.debug("Current status : {}, Resume after creating the dump : {}", currentStatus, resume);
 
             // pause the game
@@ -738,7 +738,7 @@ public class MemorySearchService extends Service<SearchResult> {
                     if (showDumpInfo) {
                         long regionDuration = System.currentTimeMillis() - regionStartTS;
                         String mode = !useMulti ? "single(comp)"
-                                : readMode == ReadMode.MULTI_UNCOMP ? "multi(uncomp)"
+                                : readMode == EReadMode.MULTI_UNCOMP ? "multi(uncomp)"
                                 : conn.isJnoexsExtSupported() ? "multi(comp)" : "multi(uncomp, fallback 0x13)";
                         logger.debug("Dumping region : {} =>size:{},addr:{} duration:{}ms mode:{}", r, r.getSize(), r.getStart(), regionDuration, mode);
                     }

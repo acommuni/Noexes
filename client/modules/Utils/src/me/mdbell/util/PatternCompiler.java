@@ -4,7 +4,7 @@ import org.objectweb.asm.*;
 
 public class PatternCompiler {
 
-    public enum Condition {
+    public enum ECondition {
         EQUALS, NOT_EQUALS, GREATER_THEN, LESS_THEN
     }
 
@@ -13,15 +13,15 @@ public class PatternCompiler {
 
     public static class PatternElement {
         int value;
-        Condition condition;
+        ECondition condition;
 
         public PatternElement(int value) {
-            this(value, Condition.EQUALS);
+            this(value, ECondition.EQUALS);
         }
 
-        public PatternElement(int value, Condition condition) {
+        public PatternElement(int value, ECondition condition) {
             if (condition == null) {
-                condition = Condition.EQUALS;
+                condition = ECondition.EQUALS;
             }
             this.value = value;
             this.condition = condition;
@@ -31,7 +31,7 @@ public class PatternCompiler {
             return value;
         }
 
-        public Condition getCondition() {
+        public ECondition getCondition() {
             return condition;
         }
 
@@ -88,7 +88,7 @@ public class PatternCompiler {
         return cw;
     }
 
-    private static void visitTest(MethodVisitor mv, int index, int value, Label end, Condition condition) {
+    private static void visitTest(MethodVisitor mv, int index, int value, Label end, ECondition condition) {
         mv.visitVarInsn(Opcodes.ALOAD, 2);
         mv.visitIntInsn(Opcodes.SIPUSH, index);
         mv.visitInsn(Opcodes.BALOAD);
@@ -96,7 +96,7 @@ public class PatternCompiler {
         mv.visitJumpInsn(getConditionOp(condition), end);
     }
 
-    private static int getConditionOp(Condition condition) {
+    private static int getConditionOp(ECondition condition) {
         // all of these need to be inverted as they should return if the condition is
         // not met
         switch (condition) {

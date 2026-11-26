@@ -49,24 +49,13 @@ public class WriteValue implements IInstruction {
             String val = StringUtils.remove(value, "0x");
             res = Long.parseLong(val, 16);
         } else {
-            switch (valueType) {
-                case S8:
-                case S16:
-                case S32:
-                case S64:
-                    res = Long.parseUnsignedLong(value);
-                    break;
-                case U8:
-                case U16:
-                case U32:
-                case U64:
-                    res = Long.parseLong(value);
-                    break;
-                case FLT:
-                    Float floatValue = Float.parseFloat(value);
-
-                    res = Float.floatToIntBits(floatValue);
-            }
+            res = switch (valueType) {
+                case S8, S16, S32, S64 -> Long.parseUnsignedLong(value);
+                case U8, U16, U32, U64 -> Long.parseLong(value);
+                case FLT -> Float.floatToIntBits(Float.parseFloat(value));
+                // DBL/PTR : ignorés comme avant (res = 0)
+                default -> 0L;
+            };
         }
 
         return res;
@@ -77,27 +66,13 @@ public class WriteValue implements IInstruction {
         if (StringUtils.startsWithIgnoreCase(value, "0x")) {
             res = StringUtils.remove(value, "0x");
         } else {
-            switch (valueType) {
-                case S8:
-                case S16:
-                case S32:
-                case S64:
-                    Long ulVal = Long.parseUnsignedLong(value);
-                    res = Long.toHexString(ulVal);
-                    break;
-                case U8:
-                case U16:
-                case U32:
-                case U64:
-                    Long lVal = Long.parseLong(value);
-                    res = Long.toHexString(lVal);
-                    break;
-                case FLT:
-                    Float floatValue = Float.parseFloat(value);
-
-                    Integer iVal = Float.floatToIntBits(floatValue);
-                    res = Integer.toHexString(iVal);
-            }
+            res = switch (valueType) {
+                case S8, S16, S32, S64 -> Long.toHexString(Long.parseUnsignedLong(value));
+                case U8, U16, U32, U64 -> Long.toHexString(Long.parseLong(value));
+                case FLT -> Integer.toHexString(Float.floatToIntBits(Float.parseFloat(value)));
+                // DBL/PTR : ignorés comme avant (res = "")
+                default -> "";
+            };
         }
         return res;
     }

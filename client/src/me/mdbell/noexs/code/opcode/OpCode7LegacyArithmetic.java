@@ -4,7 +4,7 @@ import me.mdbell.noexs.code.opcode.annotation.AOpCodeFieldOrder;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodeOperation;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodePattern;
 import me.mdbell.noexs.code.opcode.model.EArithmeticOperation;
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 import me.mdbell.noexs.code.opcode.model.NoOp;
 import me.mdbell.noexs.code.opcode.model.Register;
 import me.mdbell.noexs.code.opcode.model.Value;
@@ -36,7 +36,7 @@ import me.mdbell.noexs.code.opcode.model.Value;
 @AOpCodeOperation(operation = EOpCode.LEGACY_ARITHMETIC)
 public class OpCode7LegacyArithmetic extends AOpCode {
     @AOpCodeFieldOrder(order = 1)
-    private EDataType dataType;
+    private EOpCodeDataType dataType;
 
     @AOpCodeFieldOrder(order = 2)
     @AOpCodePattern(pattern = "0")
@@ -56,7 +56,7 @@ public class OpCode7LegacyArithmetic extends AOpCode {
     @AOpCodeFieldOrder(order = 6)
     private Value value;
 
-    public static OpCode7LegacyArithmetic legacyArithmetic(EDataType dataType, String register,
+    public static OpCode7LegacyArithmetic legacyArithmetic(EOpCodeDataType dataType, String register,
             EArithmeticOperation arithmeticOperation, long value) {
         OpCode7LegacyArithmetic res = new OpCode7LegacyArithmetic();
         res.dataType = dataType;
@@ -70,5 +70,11 @@ public class OpCode7LegacyArithmetic extends AOpCode {
     public String abstractInstruction() {
         // TODO Auto-generated method stub
         return null;
+    }
+
+    @Override
+    public String explain() {
+        return "Arithmétique (legacy) : R" + register.getRegister() + " = R" + register.getRegister() + " "
+                + arithmeticOperation + " 0x" + Long.toHexString(value.getValue()).toUpperCase() + " (" + dataType + ")";
     }
 }

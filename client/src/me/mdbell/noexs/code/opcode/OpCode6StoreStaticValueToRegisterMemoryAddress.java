@@ -4,7 +4,7 @@ import me.mdbell.noexs.code.opcode.annotation.AOpCodeFieldOrder;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodeFixValueSize;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodeOperation;
 import me.mdbell.noexs.code.opcode.annotation.AOpCodePattern;
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 import me.mdbell.noexs.code.opcode.model.Flag;
 import me.mdbell.noexs.code.opcode.model.NoOp;
 import me.mdbell.noexs.code.opcode.model.Register;
@@ -28,7 +28,7 @@ import me.mdbell.noexs.code.opcode.model.Value;
 @AOpCodeOperation(operation = EOpCode.STORE_STATIC_VALUE_TO_REGISTER_MEMORY_ADDRESS)
 public class OpCode6StoreStaticValueToRegisterMemoryAddress extends AOpCode {
     @AOpCodeFieldOrder(order = 1)
-    private EDataType dataType;
+    private EOpCodeDataType dataType;
 
     @AOpCodeFieldOrder(order = 2)
     @AOpCodePattern(pattern = "0")
@@ -50,12 +50,12 @@ public class OpCode6StoreStaticValueToRegisterMemoryAddress extends AOpCode {
     @AOpCodePattern(pattern = "0")
     private NoOp noOp2 = new NoOp("0");
 
-    @AOpCodeFixValueSize(dataType = EDataType.T64)
+    @AOpCodeFixValueSize(dataType = EOpCodeDataType.T64)
     @AOpCodeFieldOrder(order = 8)
     private Value value;
 
     public static OpCode6StoreStaticValueToRegisterMemoryAddress storeStaticValueToRegisterMemoryAddress(
-            EDataType dataType, String register, boolean incrementRegister, boolean offsetRegisterEnable,
+            EOpCodeDataType dataType, String register, boolean incrementRegister, boolean offsetRegisterEnable,
             String offsetRegister, long value) {
         OpCode6StoreStaticValueToRegisterMemoryAddress res = new OpCode6StoreStaticValueToRegisterMemoryAddress();
         res.dataType = dataType;
@@ -72,6 +72,20 @@ public class OpCode6StoreStaticValueToRegisterMemoryAddress extends AOpCode {
     public String abstractInstruction() {
         // TODO Auto-generated method stub
         return null;
+    }
+
+    @Override
+    public String explain() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Écrit la valeur 0x").append(Long.toHexString(value.getValue()).toUpperCase()).append(" (").append(dataType)
+                .append(") à l'adresse pointée par le registre R").append(register.getRegister());
+        if (incrementRegister.getFlag()) {
+            sb.append(", puis R").append(register.getRegister()).append(" += taille de la valeur");
+        }
+        if (offsetRegisterEnable.getFlag()) {
+            sb.append(", offset ajouté depuis R").append(offsetRegister.getRegister());
+        }
+        return sb.toString();
     }
 
 }

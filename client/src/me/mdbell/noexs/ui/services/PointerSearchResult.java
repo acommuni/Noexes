@@ -1,6 +1,6 @@
 package me.mdbell.noexs.ui.services;
 
-import me.mdbell.noexs.code.opcode.model.EDataType;
+import me.mdbell.noexs.code.opcode.model.EOpCodeDataType;
 import me.mdbell.noexs.core.EMemoryRegion;
 import me.mdbell.noexs.ui.controllers.ToolsController;
 import me.mdbell.util.HexUtils;
@@ -112,7 +112,7 @@ public class PointerSearchResult implements Comparable<PointerSearchResult>, Clo
     @Override
     public String toString() {
         return "PointerSearchResult [address=0x" + HexUtils.formatAddress(address) + ", offset="
-                + HexUtils.format(EDataType.T16, offset, true) + ", value=" + HexUtils.formatAddress(value)
+                + HexUtils.format(EOpCodeDataType.T16, offset, true) + ", value=" + HexUtils.formatAddress(value)
                 + ", value_pointed=" + HexUtils.formatAddress(value + offset) + ", depth=" + depth + ", prev=" + prev
                 + "]";
     }

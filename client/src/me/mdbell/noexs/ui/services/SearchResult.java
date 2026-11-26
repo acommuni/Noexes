@@ -22,9 +22,9 @@ import me.mdbell.noexs.dump.MemoryDump;
 import me.mdbell.noexs.io.MappedList;
 import me.mdbell.noexs.misc.DumpAddressList;
 import me.mdbell.noexs.ui.NoexesFiles;
-import me.mdbell.noexs.ui.models.ConditionType;
-import me.mdbell.noexs.ui.models.DataType;
-import me.mdbell.noexs.ui.models.SearchType;
+import me.mdbell.noexs.ui.models.EConditionType;
+import me.mdbell.noexs.ui.models.EDataType;
+import me.mdbell.noexs.ui.models.ESearchType;
 import me.mdbell.util.HexUtils;
 
 public final class SearchResult implements Closeable {
@@ -38,13 +38,13 @@ public final class SearchResult implements Closeable {
     private File location;
     List<Long> addresses;
     List<DumpRegion> regions;
-    DataType dataType;
-    SearchType type;
+    EDataType dataType;
+    ESearchType type;
 
     TemporalAccessor time = null;
     String suffix = null;
 
-    ConditionType compareType;
+    EConditionType compareType;
     long knownValue;
 
     long start;
@@ -84,11 +84,11 @@ public final class SearchResult implements Closeable {
         return start;
     }
 
-    public DataType getDataType() {
+    public EDataType getDataType() {
         return dataType;
     }
 
-    public SearchType getType() {
+    public ESearchType getType() {
         return type;
     }
 
@@ -139,8 +139,8 @@ public final class SearchResult implements Closeable {
         if (prev != null) {
             prev.close();
         }
-        if (addresses instanceof Closeable) {
-            ((Closeable) addresses).close();
+        if (addresses instanceof Closeable c) {
+            c.close();
         }
     }
 
@@ -155,14 +155,14 @@ public final class SearchResult implements Closeable {
     static class SerializedSearchResult {
         public String location;
         public long memoryDumpSize;
-        public DataType dataType;
-        public SearchType type;
+        public EDataType dataType;
+        public ESearchType type;
         public long start;
         public long end;
         public String prevLocation;
         public String addressLocation;
         public long addressesSize;
-        public ConditionType compareType;
+        public EConditionType compareType;
         public String knownValue;
 
         protected SerializedSearchResult() {
@@ -191,8 +191,7 @@ public final class SearchResult implements Closeable {
             if (this.prev != null && this.prev.location != null) {
                 ss.prevLocation = this.prev.getFilename();
             }
-            if (addresses instanceof MappedList<Long>) {
-                MappedList<Long> mappedList = (MappedList<Long>) addresses;
+            if (addresses instanceof MappedList<Long> mappedList) {
                 ss.addressLocation = mappedList.getFile().getPath();
                 ss.addressesSize = mappedList.size();
                 logger.debug("Address file : {}, size : {}", ss.addressLocation, ss.addressesSize);
@@ -230,7 +229,7 @@ public final class SearchResult implements Closeable {
                 logger.debug("Reading addresses from file : {}", ssr.addressLocation);
                 res.addresses = MappedList.createLongList(new File(ssr.addressLocation), "rw", (int) ssr.addressesSize);
             } else {
-                if (res.type == SearchType.UNKNOWN) {
+                if (res.type == ESearchType.UNKNOWN) {
                     res.addresses = new DumpAddressList(res.curr, res.dataType.getSize());
                     res.regions = res.curr.getIndicesAsRegions();
                 }

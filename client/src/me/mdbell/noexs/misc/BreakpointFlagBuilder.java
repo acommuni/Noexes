@@ -5,7 +5,7 @@ public class BreakpointFlagBuilder {
     private boolean enabled = true;
     private int bas = 0xF;
     private int lbn = 0;
-    private BreakpointType type = BreakpointType.UNLINKED_INSN_ADDRESS_MATCH;
+    private EBreakpointType type = EBreakpointType.UNLINKED_INSN_ADDRESS_MATCH;
 
     public BreakpointFlagBuilder() {
 
@@ -26,7 +26,7 @@ public class BreakpointFlagBuilder {
         return this;
     }
 
-    public BreakpointFlagBuilder setBreakpointType(BreakpointType t) {
+    public BreakpointFlagBuilder setBreakpointType(EBreakpointType t) {
         this.type = t;
         return this;
     }

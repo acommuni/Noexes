@@ -3,7 +3,7 @@ package me.mdbell.noexs.misc;
 public class WatchpointFlagBuilder {
 
     boolean enabled;
-    MatchType lsc = MatchType.ALL;
+    EMatchType lsc = EMatchType.ALL;
     int bas;
     int lbn;
     int mask;
@@ -18,7 +18,7 @@ public class WatchpointFlagBuilder {
         return this;
     }
 
-    public WatchpointFlagBuilder setAccessContol(MatchType type) {
+    public WatchpointFlagBuilder setAccessContol(EMatchType type) {
         this.lsc = type;
         return this;
     }
@@ -49,12 +49,12 @@ public class WatchpointFlagBuilder {
         return res;
     }
 
-    public enum MatchType {
+    public enum EMatchType {
         LOAD(0b01), STORE(0b10), ALL(0b11);
 
         int value;
 
-        MatchType(int value) {
+        EMatchType(int value) {
             this.value = value;
         }
     }

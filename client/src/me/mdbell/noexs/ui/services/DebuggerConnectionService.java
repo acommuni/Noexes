@@ -15,7 +15,7 @@ import me.mdbell.noexs.core.IConnection;
 import me.mdbell.noexs.io.net.SocketConnection;
 import me.mdbell.noexs.io.usb.UsbConnection;
 import me.mdbell.noexs.io.usb.UsbUtils;
-import me.mdbell.noexs.ui.models.ConnectionType;
+import me.mdbell.noexs.ui.models.EConnectionType;
 
 public class DebuggerConnectionService extends ScheduledService<IConnection> {
 
@@ -24,7 +24,7 @@ public class DebuggerConnectionService extends ScheduledService<IConnection> {
     private String host;
     private int port;
     private int timeout = 1000;
-    private ConnectionType type;
+    private EConnectionType type;
 
     public DebuggerConnectionService() {
         super();
@@ -90,7 +90,7 @@ public class DebuggerConnectionService extends ScheduledService<IConnection> {
         this.port = port;
     }
 
-    public void setType(ConnectionType type) {
+    public void setType(EConnectionType type) {
         this.type = type;
         if (this.type != null) {
             setMaximumFailureCount(this.type.getMaxConnectionFailureCountt());

@@ -92,6 +92,33 @@ public class OpCodeManager {
         return res;
     }
 
+    /**
+     * Explique un cheat venu d'ailleurs (ex: contenu d'un fichier cheatdb) : décode chaque ligne
+     * (sections [Nom] et opcodes hex, commentaires # ignorés) et produit pour chaque ligne
+     * "HEX => explication en clair", suivi du résumé (instruction abstraite) si disponible.
+     * C'est l'inverse du CheatCodeMaker, avec en plus une explication lisible.
+     */
+    public static String explainCheat(String cheatContent) {
+        List<String> lines = new ArrayList<>();
+        for (String line : splitLines(cheatContent)) {
+            String t = StringUtils.trim(line);
+            if (t.isEmpty() || t.startsWith("#")) {
+                continue;
+            }
+            lines.add(t);
+        }
+        List<AOpCode> ops = decodeCheatCode(lines.toArray(new String[0]));
+        StringBuilder res = new StringBuilder();
+        for (int i = 0; i < ops.size(); i++) {
+            res.append(lines.get(i)).append("  =>  ").append(ops.get(i).explain()).append('\n');
+        }
+        String abs = abstractInstructions(ops);
+        if (abs != null && !abs.isBlank()) {
+            res.append("Résumé : ").append(abs).append('\n');
+        }
+        return res.toString();
+    }
+
     public void init() {
 
         Set<Class<?>> operations = reflections.get(Scanners.TypesAnnotated.with(AOpCodeOperation.class).asClass());

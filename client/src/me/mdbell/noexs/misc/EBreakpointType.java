@@ -1,6 +1,6 @@
 package me.mdbell.noexs.misc;
 
-public enum BreakpointType {
+public enum EBreakpointType {
     UNLINKED_INSN_ADDRESS_MATCH(0b0000),
     LINKED_INSN_ADDRESS_MATCH(0b0001),
     UNLINKED_CONTEXT_IDR_MATCH(0b0010),
@@ -14,7 +14,7 @@ public enum BreakpointType {
 
     int value;
 
-    BreakpointType(int value) {
+    EBreakpointType(int value) {
         this.value = value;
     }
 

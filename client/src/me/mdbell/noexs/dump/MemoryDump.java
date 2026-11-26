@@ -212,18 +212,14 @@ public class MemoryDump implements Closeable {
 
     public long getValue(long addr, int size) throws IOException {
         ByteBuffer buffer = getBuffer(addr);
-        switch (size) {
-            case 1:
-                return buffer.get() & 0xFF;
-            case 2:
-                return buffer.getShort() & 0xFFFF;
-            case 4:
-                return buffer.getInt() & 0xFFFFFFFFL;
-            case 8:
-                return buffer.getLong();
-            default:
-                throw new UnsupportedOperationException("invalid size:" + size);
-        }
+        // switch expression (Java 14+) : plus de break, default -> throw
+        return switch (size) {
+            case 1 -> buffer.get() & 0xFF;
+            case 2 -> buffer.getShort() & 0xFFFF;
+            case 4 -> buffer.getInt() & 0xFFFFFFFFL;
+            case 8 -> buffer.getLong();
+            default -> throw new UnsupportedOperationException("invalid size:" + size);
+        };
     }
 
     public long getTid() {

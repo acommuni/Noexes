@@ -15,7 +15,7 @@ public class WatchlistModel {
     SimpleStringProperty desc = new SimpleStringProperty("-");
     SimpleObjectProperty<String> addr = new SimpleObjectProperty<>(HexUtils.formatAddress(0));
     SimpleObjectProperty<Long> value = new SimpleObjectProperty<>(0L);
-    SimpleObjectProperty<DataType> type = new SimpleObjectProperty<>(DataType.INT);
+    SimpleObjectProperty<EDataType> type = new SimpleObjectProperty<>(EDataType.INT);
 
     public WatchlistModel() {
         updateProperty().addListener((observable, oldValue, newValue) -> {
@@ -50,7 +50,7 @@ public class WatchlistModel {
         return value;
     }
 
-    public SimpleObjectProperty<DataType> typeProperty() {
+    public SimpleObjectProperty<EDataType> typeProperty() {
         return type;
     }
 
@@ -70,11 +70,11 @@ public class WatchlistModel {
         this.locked.set(locked);
     }
 
-    public DataType getType() {
+    public EDataType getType() {
         return type.get();
     }
 
-    public void setType(DataType t) {
+    public void setType(EDataType t) {
         type.set(t);
     }
 

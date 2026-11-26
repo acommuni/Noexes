@@ -12,7 +12,7 @@ import me.mdbell.javafx.control.HexSpinner;
 import me.mdbell.noexs.core.Debugger;
 import me.mdbell.noexs.core.MemoryInfo;
 import me.mdbell.noexs.ui.Settings;
-import me.mdbell.noexs.ui.models.DataType;
+import me.mdbell.noexs.ui.models.EDataType;
 import me.mdbell.noexs.ui.models.MemoryViewerTableModel;
 import me.mdbell.util.HexUtils;
 import me.mdbell.util.IPatternMatcher;
@@ -86,7 +86,7 @@ public class MemoryViewerController implements IController {
     AddressSpinner memViewAddrBox;
 
     @FXML
-    ComboBox<DataType> pokeType;
+    ComboBox<EDataType> pokeType;
 
     @FXML
     HexSpinner pokeValue;
@@ -154,8 +154,8 @@ public class MemoryViewerController implements IController {
             }
         });
 
-        pokeType.getItems().addAll(DataType.values());
-        pokeType.setValue(DataType.INT);
+        pokeType.getItems().addAll(EDataType.values());
+        pokeType.setValue(EDataType.INT);
 
         pokeType.getSelectionModel().selectedItemProperty()
                 .addListener((observable, oldValue, newValue) -> pokeValue.setSize(newValue.getSize() * 2));
@@ -283,7 +283,7 @@ public class MemoryViewerController implements IController {
             @Override
             public void run() {
                 if (refreshCheckbox.isSelected() && mc.getDebugger().connected()
-                        && mc.getCurrentTab() == MainController.Tab.MEMORY_VIEWER) {
+                        && mc.getCurrentTab() == MainController.ETab.MEMORY_VIEWER) {
                     mc.runAndWait(() -> dumpToMemoryViewer(lastAddress));
                 }
             }
